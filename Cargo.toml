@@ -1,0 +1,11 @@
+[package]
+name = "Calcal"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "Calcal"
+path = "src/main.rs"
+
+[dependencies]
+minreq = { version = "2.12.0", features = ["https"] }
