@@ -5,33 +5,23 @@ use std::process::exit;
 use std::fmt;
 
 fn main() {
-    println!("Hello world!\n");
     test_advance_if_possible_after_unicode();
+    println!("---- start program ------");
 
-    // let response = make_http_request().unwrap_or_else(|error| {
-    //     eprintln!("An error occured while making http request: {error}");
-    //     exit(1)
-    // });
+    println!("Hello world!\n");
 
-    // parse_entities(response);
+    let response = make_http_request().unwrap_or_else(|error| {
+        eprintln!("An error occured while making http request: {error}");
+        exit(1)
+    });
+
+    parse_entities(response).unwrap_or_else(|error| {
+        eprintln!("An error occured while making http request: {error}");
+        exit(1)
+    });
 }
 
-fn make_http_request() -> Result<String, Error> {
-   let string_value = minreq::get("https://whoniverse-app.com/calcal/main.php")
-        .send()
-        .map_err(|_e| {
-            Error::InvalidResponse
-        })?
-        .as_str()
-        .map_err(|_e| {
-            Error::ExpectedEOF
-        })?
-        .to_owned();
-
-    Ok(string_value)
-}
-
-fn parse_entities(string: String) {
+fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
     let mut parser = Parser {
         i: 0,
         end_index: string.len(),
@@ -39,14 +29,14 @@ fn parse_entities(string: String) {
         entries: vec![],
     };
 
-    // println!("first tokens: \n{}", parser.text[parser.i..parser.i + 50].to_string());
+    println!("first tokens: \n{}", parser.text[parser.i..parser.i + 50].to_string());
 
     while parser.i < parser.text.len() {
-            // eatWhitespacesAndNewlines()
             eat_whitespaces_and_newlines(&mut parser);
 
-            if next_matches_ascii(&parser, "Date: ") {
-
+            if !next_matches_ascii(&parser, "Date: ") {
+                // print_error_position();
+                return Err(Error::ExpectedEntry)
             }
 
 
@@ -75,6 +65,9 @@ fn parse_entities(string: String) {
             // for debugging
             parser.i += 1;
     }
+
+
+    return Err(Error::InvalidResponse)
 }
 
 fn next_matches_ascii(parser: &Parser, search: &str) -> bool {
@@ -147,50 +140,10 @@ fn advance_if_possible_after_unicode(text: &[u8], i: &mut usize, end_index: usiz
     }
 }
 
-fn test_advance_if_possible_after_unicode() {
-    // 2  Boundary condition test cases                                              
-    //                                                                               
-    // 2.1  First possible sequence of a certain length                              
-    //                                                                               
-    // 2.1.1  1 byte  (U-00000000):        "�"                                       
-    // 2.1.2  2 bytes (U-00000080):        ""                                     
-    // 2.1.3  3 bytes (U-00000800):        "ࠀ"                                       
-    // 2.1.4  4 bytes (U-00010000):        "𐀀"                                       
-    //                                                                              
-    // 2.2  Last possible sequence of a certain length                               
-    //                                                                               
-    // 2.2.1  1 byte  (U-0000007F):        ""                                      
-    // 2.2.2  2 bytes (U-000007FF):        "߿"                                       
-    // 2.2.3  3 bytes (U-0000FFFF):        "￿"                                     
-    // 2.2.4  4 bytes (U-001FFFFF):        "����"                                     
-    
-    // 2 chars of 1 byte
-    // 2 chars of 2 bytes
-    // 2 chars of 3 bytes
-    // 2 chars of 4 bytes
-    // 10 chars of 1 byte
-    
-    let string = "�߿ࠀ￿𐀀����0123456789";
-    let bytes = string.as_bytes();
-    let mut i = 0;
-
-    let diff: usize = 10;
-    let expected = 22;
-    
-    advance_if_possible_after_unicode(bytes, &mut i, bytes.len(), diff);
-    
-    let test = i == expected;
-    if test {
-        println!("OK");
-    } else {
-        println!("FAIL! i: {}, expected {}", i, expected);
-    }
-}
-
 enum Error {
     InvalidResponse,
     ExpectedEOF,
-    // ExpectedEntry,
+    ExpectedEntry,
     // ExpectedFoodItem, 
     // ExpectedCalorieValue,
     // InvalidQuantity,
@@ -205,8 +158,11 @@ impl fmt::Display for Error {
                 write!(f, "Invalid response")
             },
             Error::ExpectedEOF => {
-                write!(f, "Expected End of file")
-            }
+                write!(f, "Expected end of file")
+            },
+            Error::ExpectedEntry => {
+                write!(f, "Expected entry")
+            },
         }
     }
 }
@@ -241,3 +197,35 @@ enum QuantityMeasurement {
     Kilogram,
     Cup,
 }
+
+// done
+
+fn make_http_request() -> Result<String, Error> {
+    Ok(minreq::get("https://whoniverse-app.com/calcal/main.php")
+        .send()
+        .map_err(|_e| { Error::InvalidResponse })?
+        .as_str()
+        .map_err(|_e| { Error::ExpectedEOF })?
+        .to_owned())
+}
+
+// unit tests
+
+fn test_advance_if_possible_after_unicode() {
+    let string = "über-человек";
+    let bytes = string.as_bytes();
+    let mut i = 0;
+
+    let diff: usize = 10;
+    let expected = 16;
+    
+    advance_if_possible_after_unicode(bytes, &mut i, bytes.len(), diff);
+    
+    let test = i == expected;
+    if test {
+        println!("Test 1: OK");
+    } else {
+        println!("Test 1: FAIL! i: {}, expected {}", i, expected);
+    }
+}
+
