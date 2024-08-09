@@ -55,14 +55,133 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             return Err(Error::ExpectedEOF);
         }
 
-        let date_string = &parser.text[parser.i..date_newline_index as usize]; // todo: trim
+        let date_string = substring_with_length(&parser, date_newline_index as usize); // todo: trim 
         println!("Found entry: {}", date_string);
-        // let dateString = String(textRemainder[i..<dateNewLineIndex]).trimmingCharacters(in: .whitespaces)
 
         advance_if_possible_after_unicode(&mut parser, date_newline_index as usize);
 
-        // var sections: [EntryEntity.Section] = []
+        let mut sections: Vec<EntrySectionEntity> = vec!();
 
+        while parser.end_index > parser.i {
+            eat_whitespaces_but_not_newlines(&mut parser);
+
+            // Date means new entry
+            let next_is_another_date_declaration = next_matches_ascii(&parser, "Date: ");
+            if next_is_another_date_declaration {
+                break;
+            }
+
+            let section_separator_index = first_index(&parser, '-');
+            if section_separator_index == NOT_FOUND {
+                if sections.len() == 0 {
+                    eat_whitespaces_but_not_newlines(&mut parser);
+                    let i = parser.i.clone();
+                    advance_if_possible_after_unicode(&mut parser, i);
+                    continue;
+                }
+                break;
+            }
+
+
+            let section_name = substring_with_length(&parser, section_separator_index as usize); // todo: trim
+            println!("Found section: {}", section_name);
+            
+            println!("-----\n{}\n-----", &parser.text[parser.i..parser.i+20]);
+
+            advance_if_possible_after_unicode(&mut parser, section_separator_index as usize);
+
+            let section_newline_index = first_index(&parser, '\n');
+            if section_newline_index == NOT_FOUND {
+                print_error_position(&parser);
+                return Err(Error::ExpectedEOF);
+            }
+            
+            advance_if_possible_after_unicode(&mut parser, section_newline_index as usize);
+
+            let mut food_items: Vec<Item> = vec!();
+
+            while parser.end_index > parser.i {
+                eat_whitespaces_and_newlines(&mut parser);
+
+                // new line means end of section
+                if next_matches_ascii(&parser, "\n") {
+                    let i = parser.i.clone();
+                    advance_if_possible_after_unicode(&mut parser, i);
+                    break;
+                }
+
+                let item_start_index = first_index(&parser, '-');
+                if item_start_index == NOT_FOUND {
+                    if food_items.len() == 0 {
+                        print_error_position(&parser);
+                        return Err(Error::ExpectedFoodItem);
+                    }
+                    break;
+                }
+
+                advance_if_possible_after_unicode(&mut parser, item_start_index as usize);
+                eat_whitespaces_but_not_newlines(&mut parser);
+
+                let item_name_separator = first_index(&parser, ',');
+                if item_name_separator == NOT_FOUND {
+                    print_error_position(&parser);
+                    return Err(Error::ExpectedCalorieValue);
+                }
+
+                let item_name = substring_with_length(&parser, item_name_separator as usize); // todo: trim
+                println!("Found item: {}", item_name);
+                advance_if_possible_after_unicode(&mut parser, item_name_separator as usize);
+
+//     let quantityValue: Float, measurement: EntryEntity.QuantityMeasurement
+//     let itemEndOfLine = textRemainder.firstIndex(of: "\n") ?? endIndex
+//     let commasCount = textRemainder[i..<itemEndOfLine].filter { $0 == "," }.count
+//     if commasCount > 0 { // optionally parse quantity
+//         eatWhitespaces()
+//         guard let itemQuantitySeparator = textRemainder.firstIndex(of: ",") else {
+//             printErrorPosition()
+//             throw Error.expectedCalorieValue
+//         }
+//         let itemQuantityString = String(textRemainder[i..<itemQuantitySeparator]).trimmingCharacters(in: .whitespaces)
+//         advanceIfPossible(after: itemQuantitySeparator)
+        
+//         // finalise item
+//         guard let (_quantityValue, _measurement) = Self.getQuantity(text: itemQuantityString)
+//         else {
+//             printErrorPosition()
+//             throw Error.invalidQuantity
+//         }
+//         quantityValue = _quantityValue
+//         measurement = _measurement
+//     } else {
+//         quantityValue = 1
+//         measurement = .portion
+//     }
+    
+//     eatWhitespaces()
+//     let itemNewLine = textRemainder.firstIndex(of: "\n") ?? endIndex
+//     var itemCalorieString = String(textRemainder[i..<itemNewLine]).trimmingCharacters(in: .whitespaces)
+//     guard itemCalorieString.contains(" kcal") else {
+//         printErrorPosition()
+//         throw Error.invalidCaloriesMissingKcal
+//     }
+//     itemCalorieString = String(itemCalorieString.dropLast(" kcal".count))
+//     advanceIfPossible(after: itemNewLine)
+    
+//     guard let caloriesValue = itemCalorieString.floatValue else {
+//         printErrorPosition()
+//         throw Error.invalidCalories
+//     }
+    
+//     let foodItem = EntryEntity.Item(
+//         title: itemName,
+//         quantity: quantityValue,
+//         measurement: measurement,
+//         calories: caloriesValue
+//     )
+//     foodItems.append(foodItem)
+            }
+
+        }
 
 
 
@@ -81,7 +200,7 @@ fn first_index_s(bytes: &[u8], offset: usize, end_index: usize, search: char) ->
     let mut i = offset;
     while end_index > i {
         if bytes[i] as char == search {
-            return i as i32;
+            return (i - offset) as i32;
         }
         advance_if_possible_after_unicode_s(bytes, &mut i, end_index, 0);
     }
@@ -126,6 +245,12 @@ fn is_whitespace(parser: &Parser) -> bool {
     return c == ' ' || c == '\n';
 }
 
+fn substring_with_length(parser: &Parser, length: usize) -> &str {
+    let mut i = parser.i;
+    advance_if_possible_after_unicode_s(parser.text.as_bytes(), &mut i, parser.end_index, length);
+    return std::str::from_utf8(&parser.text.as_bytes()[parser.i..i]).unwrap();
+}
+
 fn advance_if_possible_after_unicode(parser: &mut Parser, after: usize) {
     advance_if_possible_after_unicode_s(parser.text.as_bytes(), &mut parser.i, parser.end_index, after);
 }
@@ -138,6 +263,7 @@ fn advance_if_possible_after_unicode_s(text: &[u8], i: &mut usize, end_index: us
     let mut characters_count = 0;
 
     while *i < end_index {
+        // println!(" -- '{}'", text[*i] as char);
         if characters_count > after {
             break;
         }
@@ -165,8 +291,8 @@ enum Error {
     InvalidResponse,
     ExpectedEOF,
     ExpectedEntry,
-    // ExpectedFoodItem, 
-    // ExpectedCalorieValue,
+    ExpectedFoodItem, 
+    ExpectedCalorieValue,
     // InvalidQuantity,
     // InvalidCaloriesMissingKcal,
     // InvalidCalories,
@@ -183,6 +309,12 @@ impl fmt::Display for Error {
             },
             Error::ExpectedEntry => {
                 write!(f, "Expected entry")
+            },
+            Error::ExpectedFoodItem => {
+                write!(f, "Expected food item")
+            },
+            Error::ExpectedCalorieValue => {
+                write!(f, "Expected calorie value")
             },
         }
     }
@@ -266,14 +398,19 @@ fn test_next_matches_ascii() {
 
 fn test_first_index() {
     let string = "übermensch bin ich";
-    let index = first_index_s(string.as_bytes(), 0, string.len(), ' ');
 
-    let expected = 11;
-    let test = index == expected;
-    if test {
+    let index1 = first_index_s(string.as_bytes(), 0, string.len(), ' ');
+    let expected1 = 11;
+    let test1 = index1 == expected1;
+
+    let index2 = first_index_s(string.as_bytes(), 5, string.len(), ' ');
+    let expected2 = 11 - 5;
+    let test2 = index2 == expected2;
+
+    if test1 && test2 {
         println!("Test 3: OK");
     } else {
-        println!("Test 3: FAIL! i: {}, expected {}", index, expected);
+        println!("Test 3: FAIL!");
     }
 }
 
