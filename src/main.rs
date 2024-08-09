@@ -25,6 +25,7 @@ fn main() {
     });
 }
 
+// todo: make sure to trim whitespaces or  with newlines carefully!
 fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
     let mut parser = Parser {
         i: 0,
@@ -55,8 +56,8 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             return Err(Error::ExpectedEOF);
         }
 
-        let date_string = substring_with_length(&parser, date_newline_index as usize); // todo: trim 
-        println!("Found entry: {}", date_string);
+        let date_string = substring_with_length(&parser, date_newline_index as usize).trim();
+        println!("Found entry: '{}'", date_string);
 
         advance_if_possible_after_unicode(&mut parser, date_newline_index as usize);
 
@@ -82,12 +83,9 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 break;
             }
 
-
-            let section_name = substring_with_length(&parser, section_separator_index as usize); // todo: trim
-            println!("Found section: {}", section_name);
+            let section_name = substring_with_length(&parser, section_separator_index as usize).trim();
+            println!("Found section: '{}'", section_name);
             
-            println!("-----\n{}\n-----", &parser.text[parser.i..parser.i+20]);
-
             advance_if_possible_after_unicode(&mut parser, section_separator_index as usize);
 
             let section_newline_index = first_index(&parser, '\n');
@@ -97,6 +95,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             }
             
             advance_if_possible_after_unicode(&mut parser, section_newline_index as usize);
+            println!("-----\n{}\n-----", &parser.text[parser.i..parser.i+20]);
 
             let mut food_items: Vec<Item> = vec!();
 
@@ -128,9 +127,39 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     return Err(Error::ExpectedCalorieValue);
                 }
 
-                let item_name = substring_with_length(&parser, item_name_separator as usize); // todo: trim
+                let item_name = substring_with_length(&parser, item_name_separator as usize).trim();
                 println!("Found item: {}", item_name);
                 advance_if_possible_after_unicode(&mut parser, item_name_separator as usize);
+
+                let quantity_value: f32;
+                let measurement: QuantityMeasurement;
+                let item_end_of_line = first_index(&parser, '\n');
+                let commas_count = count_characters_in_string(&parser.text[parser.i..parser.i + item_end_of_line as usize], ',');
+                println!("item_end_of_line: {}, commas_count: {}", item_end_of_line, commas_count);
+
+                if commas_count > 0 { // optionally parse quantity
+                    eat_whitespaces_but_not_newlines(&mut parser);
+
+                    let item_quantity_separator = first_index(&parser, ',');
+                    if item_quantity_separator == NOT_FOUND {
+                        print_error_position(&parser);
+                        return Err(Error::ExpectedCalorieValue);
+                    }
+
+                    let item_quantity_string = substring_with_length(&parser, item_quantity_separator as usize).trim(); // whitespaces
+                    let quantityTuple = get_quantity(item_quantity_string);
+                    advance_if_possible_after_unicode(&mut parser, item_quantity_separator as usize);
+
+
+
+                    
+
+                } else {
+                    quantity_value = 1.0;
+                    measurement = QuantityMeasurement::Portion;
+                }
+
+
 
 //     let quantityValue: Float, measurement: EntryEntity.QuantityMeasurement
 //     let itemEndOfLine = textRemainder.firstIndex(of: "\n") ?? endIndex
@@ -191,6 +220,19 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
 
 
     todo!()
+}
+
+fn count_characters_in_string(string: &str, search: char) -> usize {
+    let string_length = string.len();
+    let mut count = 0;
+    let mut i = 0;
+    while string_length > i { 
+        if string.as_bytes()[i] as char == ' ' {
+            count += 1;
+        }
+        advance_if_possible_after_unicode_s(string.as_bytes(), &mut i, string_length, 0);
+    }
+    return count;
 }
 
 fn first_index(parser: &Parser, search: char) -> i32 {
@@ -361,6 +403,43 @@ fn make_http_request() -> Result<String, Error> {
         .map_err(|_e| { Error::ExpectedEOF })?
         .to_owned())
 }
+
+fn get_quantity(text: &str) -> Option<(f32, QuantityMeasurement)> {
+    if let Ok(value) = text.parse::<f32>() {
+        return Some((value, QuantityMeasurement::Portion));
+    }
+
+    todo!()
+}
+
+// static func getQuantity(text: String) -> (Float, EntryEntity.QuantityMeasurement)? {
+//     if let quantityValue = text.floatValue {
+//         return (quantityValue, .portion)
+//     }
+    
+//     for measurement in EntryEntity.QuantityMeasurement.allCases {
+        
+//         let acceptableValues = switch measurement {
+//         case .liter: ["milliliter", "millilitre", "liter", "litre", "ml", "l"]
+//         case .kilogram: ["kilogram", "gram", "kg", "gr", "g"]
+//         case .cup: ["cup"]
+//         case .portion: ["portion", "part"]
+//         }
+        
+//         let subdivisionValues = [
+//             "gram", "gr", "g", "milliliter", "millilitre", "ml"
+//         ]
+        
+//         for value in acceptableValues {
+//             guard text.hasSuffix(value) else { continue }
+//             let textWithoutSuffix = String(text.dropLast(value.count)).trimmingCharacters(in: .whitespaces)
+//             guard let quantityValue = textWithoutSuffix.floatValue else { return nil }
+//             let subdivision: Float = subdivisionValues.contains(value) ? 1000.0 : 1
+//             return (quantityValue / subdivision, measurement)
+//         }
+//     }
+//     return nil
+// }
 
 // unit tests
 
