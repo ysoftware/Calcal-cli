@@ -9,18 +9,19 @@ fn main() {
     test_advance_if_possible_after_unicode();
     test_next_matches_ascii();
     test_first_index();
+    test_eat_whitespaces_but_not_newlines();
     println!("---- start program ------");
 
     println!("Hello world!\n");
 
     let response = make_http_request().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
-        exit(1)
+        exit(1);
     });
 
     parse_entities(response).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
-        exit(1)
+        exit(1);
     });
 }
 
@@ -36,29 +37,29 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
         eat_whitespaces_and_newlines(&mut parser);
 
         let index_after_date = first_index(&parser, ' ');
-        if !next_matches_ascii(&parser, "Date: ") && index_after_date != NOT_FOUND {
+        let next_is_date_declaration = next_matches_ascii(&parser, "Date: ");
+        if !next_is_date_declaration || index_after_date == NOT_FOUND {
+            println!("next_matches_ascii date: {}; index_after_date: {}", next_is_date_declaration, index_after_date);
             print_error_position(&parser);
-            return Err(Error::ExpectedEntry)
+            return Err(Error::ExpectedEntry);
         }
 
-        println!("Found entry!");
+        advance_if_possible_after_unicode(&mut parser, index_after_date as usize);
 
-        // guard textRemainder[i..<endIndex].starts(with: "Date: "),
-        //       let indexAfterDate = textRemainder.firstIndex(of: " ")
-        // else {
-        //     printErrorPosition()
-        //     throw Error.expectedEntry
-        // }
-        // advance_if_possible_after_unicode(after: indexAfterDate)
+        eat_whitespaces_but_not_newlines(&mut parser);
+        let date_newline_index = first_index(&parser, '\n');
+        if date_newline_index == NOT_FOUND {
+            println!("next: {}", &parser.text[parser.i..parser.i+10]);
+            println!("date_newline_index: {}", date_newline_index);
+            print_error_position(&parser);
+            return Err(Error::ExpectedEOF);
+        }
 
-        // eatWhitespaces()
-        // guard let dateNewLineIndex = textRemainder.firstIndex(of: "\n")
-        // else {
-        //     printErrorPosition()
-        //     throw Error.expectedEOF
-        // }
+        let date_string = &parser.text[parser.i..date_newline_index as usize]; // todo: trim
+        println!("Found entry: {}", date_string);
         // let dateString = String(textRemainder[i..<dateNewLineIndex]).trimmingCharacters(in: .whitespaces)
-        // advance_if_possible_after_unicode(after: dateNewLineIndex)
+
+        advance_if_possible_after_unicode(&mut parser, date_newline_index as usize);
 
         // var sections: [EntryEntity.Section] = []
 
@@ -78,10 +79,13 @@ fn first_index(parser: &Parser, search: char) -> i32 {
 }
 fn first_index_s(bytes: &[u8], offset: usize, end_index: usize, search: char) -> i32 {
     let mut i = offset;
-    while end_index > i && bytes[i] as char != search {
+    while end_index > i {
+        if bytes[i] as char == search {
+            return i as i32;
+        }
         advance_if_possible_after_unicode_s(bytes, &mut i, end_index, 0);
     }
-    return NOT_FOUND
+    return NOT_FOUND;
 }
 
 fn next_matches_ascii(parser: &Parser, search: &str) -> bool {
@@ -92,11 +96,11 @@ fn next_matches_ascii_s(bytes: &[u8], i: usize, end_index: usize, search: &str) 
 
     let search_length: usize = search.len();
     if remaining_length < search_length {
-        return false
+        return false;
     }
 
     let byte_slice = &bytes[i..i + search_length];
-    return byte_slice == search.as_bytes()
+    return byte_slice == search.as_bytes();
 }
 
 fn print_error_position(parser: &Parser) {
@@ -104,10 +108,9 @@ fn print_error_position(parser: &Parser) {
     println!("Parser: Error occured right before this text:\n{}", previous_symbols);
 }
 
-fn eat_whitespaces_but_no_newlines(parser: &mut Parser) {
-    while parser.end_index > parser.i && is_whitespace_but_not_newline(parser) {
-        let i_value = parser.i.clone(); // bad code, how to write it inline?
-        advance_if_possible_after_unicode(parser, i_value);
+fn eat_whitespaces_but_not_newlines(parser: &mut Parser) {
+    while parser.end_index > parser.i && parser.text.as_bytes()[parser.i] as char == ' ' {
+        advance_if_possible_after_unicode(parser, 0);
     }
 }
 
@@ -118,14 +121,9 @@ fn eat_whitespaces_and_newlines(parser: &mut Parser) {
     }
 }
 
-fn is_whitespace_but_not_newline(parser: &Parser) -> bool {
-    let c = parser.text.as_bytes()[parser.i] as char;
-    return c == ' ' || c != '\n'
-}
-
 fn is_whitespace(parser: &Parser) -> bool {
     let c = parser.text.as_bytes()[parser.i] as char;
-    return c == ' ' || c == '\n'
+    return c == ' ' || c == '\n';
 }
 
 fn advance_if_possible_after_unicode(parser: &mut Parser, after: usize) {
@@ -134,14 +132,14 @@ fn advance_if_possible_after_unicode(parser: &mut Parser, after: usize) {
 fn advance_if_possible_after_unicode_s(text: &[u8], i: &mut usize, end_index: usize, after: usize) {
     if end_index < after {
         *i = end_index;
-        return
+        return;
     }
 
     let mut characters_count = 0;
 
     while *i < end_index {
         if characters_count > after {
-            break
+            break;
         }
 
         let first_byte = text[*i];
@@ -276,6 +274,27 @@ fn test_first_index() {
         println!("Test 3: OK");
     } else {
         println!("Test 3: FAIL! i: {}, expected {}", index, expected);
+    }
+}
+
+fn test_eat_whitespaces_but_not_newlines() {
+    let string = "        \naedfawd\n ".to_string();
+
+    let mut parser = Parser {
+        i: 0,
+        end_index: string.len(),
+        text: string,
+        entries: vec![],
+    };
+
+    eat_whitespaces_but_not_newlines(&mut parser);
+
+    let expected = 8;
+    let test = parser.i == expected;
+    if test {
+        println!("Test 4: OK");
+    } else {
+        println!("Test 4: FAIL! i: {}, expected {}", parser.i, expected);
     }
 }
 
