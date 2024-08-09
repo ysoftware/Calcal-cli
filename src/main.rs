@@ -35,10 +35,13 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
     while parser.i < parser.text.len() {
         eat_whitespaces_and_newlines(&mut parser);
 
-        if !next_matches_ascii(&parser, "Date: ") {
+        let index_after_date = first_index(&parser, ' ');
+        if !next_matches_ascii(&parser, "Date: ") && index_after_date != NOT_FOUND {
             print_error_position(&parser);
             return Err(Error::ExpectedEntry)
         }
+
+        println!("Found entry!");
 
         // guard textRemainder[i..<endIndex].starts(with: "Date: "),
         //       let indexAfterDate = textRemainder.firstIndex(of: " ")
@@ -67,18 +70,18 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
     }
 
 
-    return Err(Error::InvalidResponse)
+    todo!()
 }
 
-fn first_index(parser: &mut Parser, search: char) -> usize {
+fn first_index(parser: &Parser, search: char) -> i32 {
     first_index_s(parser.text.as_bytes(), parser.i, parser.end_index, search)
 }
-fn first_index_s(bytes: &[u8], offset: usize, end_index: usize, search: char) -> usize {
+fn first_index_s(bytes: &[u8], offset: usize, end_index: usize, search: char) -> i32 {
     let mut i = offset;
     while end_index > i && bytes[i] as char != search {
         advance_if_possible_after_unicode_s(bytes, &mut i, end_index, 0);
     }
-    return i
+    return NOT_FOUND
 }
 
 fn next_matches_ascii(parser: &Parser, search: &str) -> bool {
@@ -92,7 +95,7 @@ fn next_matches_ascii_s(bytes: &[u8], i: usize, end_index: usize, search: &str) 
         return false
     }
 
-    let byte_slice = &bytes[i..search_length];
+    let byte_slice = &bytes[i..i + search_length];
     return byte_slice == search.as_bytes()
 }
 
@@ -275,3 +278,5 @@ fn test_first_index() {
         println!("Test 3: FAIL! i: {}, expected {}", index, expected);
     }
 }
+
+const NOT_FOUND: i32 = -1;
