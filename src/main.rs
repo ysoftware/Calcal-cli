@@ -14,8 +14,6 @@ fn main() {
     test_get_quantity();
     println!("---- start program ------");
 
-    return;
-
     println!("Hello world!\n");
 
     let response = make_http_request().unwrap_or_else(|error| {
@@ -61,7 +59,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
         }
 
         let date_string = substring_with_length(&parser, date_newline_index as usize).trim();
-        println!("Found entry: '{}'", date_string);
 
         advance_if_possible_after_unicode(&mut parser, date_newline_index as usize);
 
@@ -88,7 +85,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             }
 
             let section_name = substring_with_length(&parser, section_separator_index as usize).trim();
-            println!("Found section: '{}'", section_name);
             
             advance_if_possible_after_unicode(&mut parser, section_separator_index as usize);
 
@@ -99,7 +95,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             }
             
             advance_if_possible_after_unicode(&mut parser, section_newline_index as usize);
-            println!("-----\n{}\n-----", &parser.text[parser.i..parser.i+20]);
 
             let mut food_items: Vec<Item> = vec!();
 
@@ -131,15 +126,16 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     return Err(Error::ExpectedCalorieValue);
                 }
 
-                let item_name = substring_with_length(&parser, item_name_separator as usize).trim();
-                println!("Found item: {}", item_name);
+                let item_name = substring_with_length(&parser, item_name_separator as usize).trim().to_string();
                 advance_if_possible_after_unicode(&mut parser, item_name_separator as usize);
 
                 let quantity_value: f32;
                 let measurement: QuantityMeasurement;
-                let item_end_of_line = first_index(&parser, '\n');
+                let mut item_end_of_line = first_index(&parser, '\n');
+                if item_end_of_line == NOT_FOUND {
+                    item_end_of_line = parser.end_index as i32; // todo: do we care about it here?
+                }
                 let commas_count = count_characters_in_string(&parser.text[parser.i..parser.i + item_end_of_line as usize], ',');
-                println!("item_end_of_line: {}, commas_count: {}", item_end_of_line, commas_count);
 
                 if commas_count > 0 { // optionally parse quantity
                     eat_whitespaces_but_not_newlines(&mut parser);
@@ -149,69 +145,61 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                         print_error_position(&parser);
                         return Err(Error::ExpectedCalorieValue);
                     }
+                    let item_quantity_string = substring_with_length(&parser, item_quantity_separator as usize - 1).trim(); // whitespaces
 
-                    let item_quantity_string = substring_with_length(&parser, item_quantity_separator as usize).trim(); // whitespaces
-                    let quantity_tuple = get_quantity(item_quantity_string);
+                    // finalise item
+                    if let Some(quantity_tuple) = get_quantity(item_quantity_string) {
+                        quantity_value = quantity_tuple.0;
+                        measurement = quantity_tuple.1;
+                    } else {
+                        print_error_position(&parser);
+                        return Err(Error::InvalidQuantity);
+                    }
+
                     advance_if_possible_after_unicode(&mut parser, item_quantity_separator as usize);
-
-
-
-                    
-
                 } else {
                     quantity_value = 1.0;
                     measurement = Portion;
                 }
 
+                eat_whitespaces_but_not_newlines(&mut parser);
 
+                let mut item_newline = first_index(&parser, '\n');
+                if item_newline == NOT_FOUND {
+                    item_newline = parser.end_index as i32; // todo: do we care about it here?
+                }
+                let mut item_calorie_string = substring_with_length(&parser, item_newline as usize - 1).trim(); // whitespaces
+                
+                if !item_calorie_string.contains(" kcal") {
+                    print_error_position(&parser);
+                    return Err(Error::InvalidCaloriesMissingKcal);
+                }
 
-//     let quantityValue: Float, measurement: EntryEntity.QuantityMeasurement
-//     let itemEndOfLine = textRemainder.firstIndex(of: "\n") ?? endIndex
-//     let commasCount = textRemainder[i..<itemEndOfLine].filter { $0 == "," }.count
-//     if commasCount > 0 { // optionally parse quantity
-//         eatWhitespaces()
-//         guard let itemQuantitySeparator = textRemainder.firstIndex(of: ",") else {
-//             printErrorPosition()
-//             throw Error.expectedCalorieValue
-//         }
-//         let itemQuantityString = String(textRemainder[i..<itemQuantitySeparator]).trimmingCharacters(in: .whitespaces)
-//         advanceIfPossible(after: itemQuantitySeparator)
-        
-//         // finalise item
-//         guard let (_quantityValue, _measurement) = Self.getQuantity(text: itemQuantityString)
-//         else {
-//             printErrorPosition()
-//             throw Error.invalidQuantity
-//         }
-//         quantityValue = _quantityValue
-//         measurement = _measurement
-//     } else {
-//         quantityValue = 1
-//         measurement = .portion
-//     }
-    
-//     eatWhitespaces()
-//     let itemNewLine = textRemainder.firstIndex(of: "\n") ?? endIndex
-//     var itemCalorieString = String(textRemainder[i..<itemNewLine]).trimmingCharacters(in: .whitespaces)
-//     guard itemCalorieString.contains(" kcal") else {
-//         printErrorPosition()
-//         throw Error.invalidCaloriesMissingKcal
-//     }
-//     itemCalorieString = String(itemCalorieString.dropLast(" kcal".count))
-//     advanceIfPossible(after: itemNewLine)
-    
-//     guard let caloriesValue = itemCalorieString.floatValue else {
-//         printErrorPosition()
-//         throw Error.invalidCalories
-//     }
-    
-//     let foodItem = EntryEntity.Item(
-//         title: itemName,
-//         quantity: quantityValue,
-//         measurement: measurement,
-//         calories: caloriesValue
-//     )
-//     foodItems.append(foodItem)
+                let len_without_suffix = item_calorie_string.len() - " kcal".len();
+                item_calorie_string = &item_calorie_string[0..len_without_suffix];
+
+                let calories_value = if let Ok(value) = item_calorie_string.parse::<f32>() {
+                    value
+                } else {
+                    print_error_position(&parser);
+                    return Err(Error::InvalidCalories);
+                };
+                advance_if_possible_after_unicode(&mut parser, item_newline as usize);
+
+                let food_item = Item { 
+                    title: item_name,
+                    quantity: quantity_value, 
+                    measurement: measurement, 
+                    calories: calories_value 
+                };
+
+                let a = &food_item.title;
+                let b = &food_item.quantity;
+                let c = &food_item.measurement;
+                let d = &food_item.calories;
+                println!("Item added: {} {} {}, {}", a, b, c, d);
+
+                food_items.push(food_item);
             }
 
         }
@@ -269,8 +257,10 @@ fn next_matches_ascii_s(bytes: &[u8], i: usize, end_index: usize, search: &str) 
 }
 
 fn print_error_position(parser: &Parser) {
-    let previous_symbols = &parser.text[parser.i..std::cmp::min(parser.i + 100, parser.end_index)];
-    println!("Parser: Error occured right before this text:\n{}", previous_symbols);
+    let previous_symbols = &parser.text[parser.i-20..parser.i]; // todo: can crash
+    println!("-----\nParser: Error occured around here:\n<<<<<\n{}", previous_symbols);
+    let next_symbols = &parser.text[parser.i..std::cmp::min(parser.i + 50, parser.end_index)];
+    println!(">>>>>\n{}\n-----", next_symbols);
 }
 
 fn eat_whitespaces_but_not_newlines(parser: &mut Parser) {
@@ -339,9 +329,28 @@ enum Error {
     ExpectedEntry,
     ExpectedFoodItem, 
     ExpectedCalorieValue,
-    // InvalidQuantity,
-    // InvalidCaloriesMissingKcal,
-    // InvalidCalories,
+    InvalidQuantity,
+    InvalidCaloriesMissingKcal,
+    InvalidCalories,
+}
+
+impl fmt::Display for QuantityMeasurement{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Portion => {
+                write!(f, "PORTION")
+            },
+            Liter => {
+                write!(f, "L")
+            },
+            Kilogram => {
+                write!(f, "KG")
+            },
+            Cup => {
+                write!(f, "CUP")
+            },
+        }
+    }
 }
 
 impl fmt::Display for Error {
@@ -361,6 +370,15 @@ impl fmt::Display for Error {
             },
             Error::ExpectedCalorieValue => {
                 write!(f, "Expected calorie value")
+            },
+            Error::InvalidQuantity => {
+                write!(f, "Expected quantity")
+            },
+            Error::InvalidCaloriesMissingKcal => {
+                write!(f, "Expected calorie value with kcal")
+            },
+            Error::InvalidCalories => {
+                write!(f, "Expected correct calories value")
             },
         }
     }
