@@ -11,7 +11,10 @@ fn main() {
     test_next_matches_ascii();
     test_first_index();
     test_eat_whitespaces_but_not_newlines();
+    test_get_quantity();
     println!("---- start program ------");
+
+    return;
 
     println!("Hello world!\n");
 
@@ -148,7 +151,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     }
 
                     let item_quantity_string = substring_with_length(&parser, item_quantity_separator as usize).trim(); // whitespaces
-                    let quantityTuple = get_quantity(item_quantity_string);
+                    let quantity_tuple = get_quantity(item_quantity_string);
                     advance_if_possible_after_unicode(&mut parser, item_quantity_separator as usize);
 
 
@@ -387,18 +390,13 @@ struct Item {
     calories: f32,
 }
 
+#[derive(PartialEq)]
 enum QuantityMeasurement {
     Portion,
     Liter,
     Kilogram,
     Cup,
 }
-
-fn quantity_measurement_all_cases() -> [QuantityMeasurement; 4] {
-    [Portion, Liter, Kilogram, Cup]
-}
-
-// done
 
 fn make_http_request() -> Result<String, Error> {
     Ok(minreq::get("https://whoniverse-app.com/calcal/main.php")
@@ -410,41 +408,42 @@ fn make_http_request() -> Result<String, Error> {
 }
 
 fn get_quantity(text: &str) -> Option<(f32, QuantityMeasurement)> {
+    assert!(text.is_ascii(), "Quantity text must always be ascii!");
+
     if let Ok(value) = text.parse::<f32>() {
         return Some((value, Portion));
     }
 
-    todo!()
-}
+    for measurement in [Portion, Liter, Kilogram, Cup] {
+        let acceptable_values: Vec<&str> = match measurement {
+            Liter => ["milliliter", "millilitre", "liter", "litre", "ml", "l"].to_vec(),
+            Kilogram => ["kilogram", "gram", "kg", "gr", "g"].to_vec(),
+            Cup => ["cup"].to_vec(),
+            Portion => ["portion", "part"].to_vec(),
+        };
 
-// static func getQuantity(text: String) -> (Float, EntryEntity.QuantityMeasurement)? {
-//     if let quantityValue = text.floatValue {
-//         return (quantityValue, .portion)
-//     }
-    
-//     for measurement in EntryEntity.QuantityMeasurement.allCases {
-        
-//         let acceptableValues = switch measurement {
-//         case .liter: ["milliliter", "millilitre", "liter", "litre", "ml", "l"]
-//         case .kilogram: ["kilogram", "gram", "kg", "gr", "g"]
-//         case .cup: ["cup"]
-//         case .portion: ["portion", "part"]
-//         }
-        
-//         let subdivisionValues = [
-//             "gram", "gr", "g", "milliliter", "millilitre", "ml"
-//         ]
-        
-//         for value in acceptableValues {
-//             guard text.hasSuffix(value) else { continue }
-//             let textWithoutSuffix = String(text.dropLast(value.count)).trimmingCharacters(in: .whitespaces)
-//             guard let quantityValue = textWithoutSuffix.floatValue else { return nil }
-//             let subdivision: Float = subdivisionValues.contains(value) ? 1000.0 : 1
-//             return (quantityValue / subdivision, measurement)
-//         }
-//     }
-//     return nil
-// }
+        let subdivision_values = [ "gram", "gr", "g", "milliliter", "millilitre", "ml" ];
+
+        'inner: for value in acceptable_values {
+            if !text.ends_with(value) {
+                continue 'inner;
+            }
+
+            let len_without_suffix = text.len() - value.len();
+            let text_without_suffix = &text[0..len_without_suffix].trim();
+
+            let quantity_value: f32;
+            match text_without_suffix.parse::<f32>() {
+                Ok(value) => { quantity_value = value; }
+                Err(_) => { return None; }
+            }
+
+            let subdivision: f32 = if subdivision_values.contains(&value) { 1000.0 } else { 1.0 };
+            return Some((quantity_value / subdivision, measurement));
+        }
+    }
+    return None;
+}
 
 // unit tests
 
@@ -476,7 +475,7 @@ fn test_next_matches_ascii() {
     if test1 && !test2 {
         println!("Test 2: OK");
     } else {
-        println!("Test 2: FAIL!");
+        println!("Test 2: FAIL! 1: {test1}; 2: {test2}");
     }
 }
 
@@ -494,7 +493,7 @@ fn test_first_index() {
     if test1 && test2 {
         println!("Test 3: OK");
     } else {
-        println!("Test 3: FAIL!");
+        println!("Test 3: FAIL! 1: {test1}; 2: {test2}");
     }
 }
 
@@ -516,6 +515,22 @@ fn test_eat_whitespaces_but_not_newlines() {
         println!("Test 4: OK");
     } else {
         println!("Test 4: FAIL! i: {}, expected {}", parser.i, expected);
+    }
+}
+
+fn test_get_quantity() {
+    let test1 = if let Some(value) = get_quantity("1500 ml") {
+        value.0 == 1.5 && value.1 == Liter
+    } else { false };
+
+    let test2 = if let Some(value) = get_quantity("2") {
+        value.0 == 2.0 && value.1 == Portion
+    } else { false };
+
+    if test1 && test2 {
+        println!("Test 5: OK");
+    } else {
+        println!("Test 5: FAIL! 1: {test1}; 2: {test2}");
     }
 }
 
