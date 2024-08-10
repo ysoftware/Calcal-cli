@@ -4,6 +4,7 @@
 
 use std::process::exit;
 use std::fmt;
+use QuantityMeasurement::*;
 
 fn main() {
     test_advance_if_possible_after_unicode();
@@ -156,7 +157,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
 
                 } else {
                     quantity_value = 1.0;
-                    measurement = QuantityMeasurement::Portion;
+                    measurement = Portion;
                 }
 
 
@@ -393,6 +394,10 @@ enum QuantityMeasurement {
     Cup,
 }
 
+fn quantity_measurement_all_cases() -> [QuantityMeasurement; 4] {
+    [Portion, Liter, Kilogram, Cup]
+}
+
 // done
 
 fn make_http_request() -> Result<String, Error> {
@@ -406,7 +411,7 @@ fn make_http_request() -> Result<String, Error> {
 
 fn get_quantity(text: &str) -> Option<(f32, QuantityMeasurement)> {
     if let Ok(value) = text.parse::<f32>() {
-        return Some((value, QuantityMeasurement::Portion));
+        return Some((value, Portion));
     }
 
     todo!()
