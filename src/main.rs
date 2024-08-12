@@ -21,6 +21,8 @@ fn main() {
         exit(1);
     });
 
+    println!("Response: {}", response);
+
     parse_entities(response).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
         exit(1);
@@ -36,7 +38,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
         entries: vec![],
     };
 
-    while parser.i < parser.text.len() {
+    while parser.end_index > parser.i {
         eat_whitespaces_and_newlines(&mut parser);
 
         let index_after_date = first_index(&parser, ' ');
@@ -58,7 +60,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             return Err(Error::ExpectedEOF);
         }
 
-        let date_string = substring_with_length(&parser, date_newline_index as usize).trim();
+        let date_string = substring_with_length(&parser, date_newline_index as usize - 1).trim().to_string();
 
         advance_if_possible_after_unicode(&mut parser, date_newline_index as usize);
 
@@ -84,8 +86,8 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 break;
             }
 
-            let section_name = substring_with_length(&parser, section_separator_index as usize).trim();
-            
+            let section_name = substring_with_length(&parser, section_separator_index as usize - 1).trim().to_string();
+
             advance_if_possible_after_unicode(&mut parser, section_separator_index as usize);
 
             let section_newline_index = first_index(&parser, '\n');
@@ -93,7 +95,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 print_error_position(&parser);
                 return Err(Error::ExpectedEOF);
             }
-            
+
             advance_if_possible_after_unicode(&mut parser, section_newline_index as usize);
 
             let mut food_items: Vec<Item> = vec!();
@@ -126,7 +128,8 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     return Err(Error::ExpectedCalorieValue);
                 }
 
-                let item_name = substring_with_length(&parser, item_name_separator as usize).trim().to_string();
+
+                let item_name = substring_with_length(&parser, item_name_separator as usize - 1).trim().to_string();
                 advance_if_possible_after_unicode(&mut parser, item_name_separator as usize);
 
                 let quantity_value: f32;
@@ -145,6 +148,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                         print_error_position(&parser);
                         return Err(Error::ExpectedCalorieValue);
                     }
+
                     let item_quantity_string = substring_with_length(&parser, item_quantity_separator as usize - 1).trim(); // whitespaces
 
                     // finalise item
@@ -166,10 +170,11 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
 
                 let mut item_newline = first_index(&parser, '\n');
                 if item_newline == NOT_FOUND {
-                    item_newline = parser.end_index as i32; // todo: do we care about it here?
+                    // todo: possibly bug, we will pass end_index as size below
+                    item_newline = parser.end_index as i32; // todo: do we care about i32 here?
                 }
                 let mut item_calorie_string = substring_with_length(&parser, item_newline as usize - 1).trim(); // whitespaces
-                
+
                 if !item_calorie_string.contains(" kcal") {
                     print_error_position(&parser);
                     return Err(Error::InvalidCaloriesMissingKcal);
@@ -197,21 +202,46 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 let b = &food_item.quantity;
                 let c = &food_item.measurement;
                 let d = &food_item.calories;
-                println!("Item added: {} {} {}, {}", a, b, c, d);
-
+                println!("Item added: '{}' '{} ({})', '{}'", a, b, c, d);
                 food_items.push(food_item);
             }
 
+            let section = EntrySectionEntity {
+                id: section_name.to_string(),
+                items: food_items
+            };
+            println!("Section added: {}", section.id);
+            sections.push(section);
+
+            eat_whitespaces_but_not_newlines(&mut parser);
+
+            let remaining_text = substring_with_length(&parser, parser.end_index - parser.i).trim(); // whitespaces
+            if next_matches_ascii(&parser, "Total: ") {
+                let newline_after_total = first_index(&parser, '\n');
+                if newline_after_total == NOT_FOUND {
+                    let end_index = parser.end_index;
+                    advance_if_possible_after_unicode(&mut parser, end_index);
+                } else {
+                    advance_if_possible_after_unicode(&mut parser, newline_after_total as usize);
+                    eat_whitespaces_but_not_newlines(&mut parser);
+                    let current_i = parser.i.clone();
+                    advance_if_possible_after_unicode(&mut parser, current_i);
+                }
+                break;
+            }
         }
 
+        let entry = EntryEntity {
+            date: date_string,
+            sections: sections
+        };
+        println!("Entry added: {}", entry.date);
+        parser.entries.push(entry);
 
-
-        // for debugging
-        parser.i += 1;
+        eat_whitespaces_and_newlines(&mut parser);
     }
 
-
-    todo!()
+    return Ok(parser.entries);
 }
 
 fn count_characters_in_string(string: &str, search: char) -> usize {
@@ -219,7 +249,7 @@ fn count_characters_in_string(string: &str, search: char) -> usize {
     let mut count = 0;
     let mut i = 0;
     while string_length > i { 
-        if string.as_bytes()[i] as char == ' ' {
+        if string.as_bytes()[i] as char == search {
             count += 1;
         }
         advance_if_possible_after_unicode_s(string.as_bytes(), &mut i, string_length, 0);
@@ -227,15 +257,19 @@ fn count_characters_in_string(string: &str, search: char) -> usize {
     return count;
 }
 
+// accepts byte offset, returns character offset!
 fn first_index(parser: &Parser, search: char) -> i32 {
     first_index_s(parser.text.as_bytes(), parser.i, parser.end_index, search)
 }
 fn first_index_s(bytes: &[u8], offset: usize, end_index: usize, search: char) -> i32 {
     let mut i = offset;
+    let mut char_i = 0;
     while end_index > i {
         if bytes[i] as char == search {
-            return (i - offset) as i32;
+            // return (i - offset) as i32;
+            return char_i;
         }
+        char_i += 1;
         advance_if_possible_after_unicode_s(bytes, &mut i, end_index, 0);
     }
     return NOT_FOUND;
@@ -257,7 +291,7 @@ fn next_matches_ascii_s(bytes: &[u8], i: usize, end_index: usize, search: &str) 
 }
 
 fn print_error_position(parser: &Parser) {
-    let previous_symbols = &parser.text[parser.i-20..parser.i]; // todo: can crash
+    let previous_symbols = &parser.text[parser.i-50..parser.i]; // todo: can crash
     println!("-----\nParser: Error occured around here:\n<<<<<\n{}", previous_symbols);
     let next_symbols = &parser.text[parser.i..std::cmp::min(parser.i + 50, parser.end_index)];
     println!(">>>>>\n{}\n-----", next_symbols);
@@ -284,7 +318,7 @@ fn is_whitespace(parser: &Parser) -> bool {
 fn substring_with_length(parser: &Parser, length: usize) -> &str {
     let mut i = parser.i;
     advance_if_possible_after_unicode_s(parser.text.as_bytes(), &mut i, parser.end_index, length);
-    return std::str::from_utf8(&parser.text.as_bytes()[parser.i..i]).unwrap();
+    return std::str::from_utf8(&parser.text.as_bytes()[parser.i..i]).unwrap(); // todo: unsafe
 }
 
 fn advance_if_possible_after_unicode(parser: &mut Parser, after: usize) {
@@ -299,7 +333,6 @@ fn advance_if_possible_after_unicode_s(text: &[u8], i: &mut usize, end_index: us
     let mut characters_count = 0;
 
     while *i < end_index {
-        // println!(" -- '{}'", text[*i] as char);
         if characters_count > after {
             break;
         }
@@ -372,7 +405,7 @@ impl fmt::Display for Error {
                 write!(f, "Expected calorie value")
             },
             Error::InvalidQuantity => {
-                write!(f, "Expected quantity")
+                write!(f, "Invalid quantity")
             },
             Error::InvalidCaloriesMissingKcal => {
                 write!(f, "Expected calorie value with kcal")
@@ -501,11 +534,11 @@ fn test_first_index() {
     let string = "übermensch bin ich";
 
     let index1 = first_index_s(string.as_bytes(), 0, string.len(), ' ');
-    let expected1 = 11;
+    let expected1 = 10;
     let test1 = index1 == expected1;
 
     let index2 = first_index_s(string.as_bytes(), 5, string.len(), ' ');
-    let expected2 = 11 - 5;
+    let expected2 = 10 - 4;
     let test2 = index2 == expected2;
 
     if test1 && test2 {
