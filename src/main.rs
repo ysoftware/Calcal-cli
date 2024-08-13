@@ -12,18 +12,18 @@ fn main() {
     test_first_index();
     test_eat_whitespaces_but_not_newlines();
     test_get_quantity();
+
     println!("---- start program ------");
 
     println!("Hello world!\n");
 
-    let response = make_http_request().unwrap_or_else(|error| {
+    let response_string = make_http_request().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
         exit(1);
     });
 
-    println!("Response: {}", response);
 
-    parse_entities(response).unwrap_or_else(|error| {
+    parse_entities(response_string).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
         exit(1);
     });
@@ -39,6 +39,7 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
     };
 
     while parser.end_index > parser.i {
+        println!("// entry loop");
         eat_whitespaces_and_newlines(&mut parser);
 
         let index_after_date = first_index(&parser, ' ');
@@ -68,6 +69,8 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
 
         while parser.end_index > parser.i {
             eat_whitespaces_but_not_newlines(&mut parser);
+            println!("// section loop");
+            print_error_position(&parser);
 
             // Date means new entry
             let next_is_another_date_declaration = next_matches_ascii(&parser, "Date: ");
@@ -101,7 +104,8 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             let mut food_items: Vec<Item> = vec!();
 
             while parser.end_index > parser.i {
-                eat_whitespaces_and_newlines(&mut parser);
+                println!("// food loop");
+                eat_whitespaces_but_not_newlines(&mut parser);
 
                 // new line means end of section
                 if next_matches_ascii(&parser, "\n") {
@@ -127,7 +131,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     print_error_position(&parser);
                     return Err(Error::ExpectedCalorieValue);
                 }
-
 
                 let item_name = substring_with_length(&parser, item_name_separator as usize - 1).trim().to_string();
                 advance_if_possible_after_unicode(&mut parser, item_name_separator as usize);
@@ -202,15 +205,17 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 let b = &food_item.quantity;
                 let c = &food_item.measurement;
                 let d = &food_item.calories;
-                println!("Item added: '{}' '{} ({})', '{}'", a, b, c, d);
+                println!("* Item added: '{}' '{} ({})', '{}'", food_item.title, food_item.quantity, food_item.measurement, food_item.calories);
                 food_items.push(food_item);
+
+                // print_error_position(&parser);
             }
 
             let section = EntrySectionEntity {
                 id: section_name.to_string(),
                 items: food_items
             };
-            println!("Section added: {}", section.id);
+            println!(":: Section added: {}\n----- \n", section.id);
             sections.push(section);
 
             eat_whitespaces_but_not_newlines(&mut parser);
@@ -224,23 +229,25 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 } else {
                     advance_if_possible_after_unicode(&mut parser, newline_after_total as usize);
                     eat_whitespaces_but_not_newlines(&mut parser);
+
                     let current_i = parser.i.clone();
                     advance_if_possible_after_unicode(&mut parser, current_i);
                 }
                 break;
-            }
+            } 
         }
 
         let entry = EntryEntity {
             date: date_string,
             sections: sections
         };
-        println!("Entry added: {}", entry.date);
+        println!("=> Entry added: {}", entry.date);
         parser.entries.push(entry);
 
         eat_whitespaces_and_newlines(&mut parser);
     }
 
+    println!("done, i: {}, end_i: {}", parser.i, parser.end_index);
     return Ok(parser.entries);
 }
 
@@ -291,10 +298,20 @@ fn next_matches_ascii_s(bytes: &[u8], i: usize, end_index: usize, search: &str) 
 }
 
 fn print_error_position(parser: &Parser) {
-    let previous_symbols = &parser.text[parser.i-50..parser.i]; // todo: can crash
-    println!("-----\nParser: Error occured around here:\n<<<<<\n{}", previous_symbols);
+    let trail_start = std::cmp::max(parser.i-10, 0);
+    let previous_symbols = &parser.text[trail_start..parser.i];
+    let count_of_newlines = count_characters_in_string(previous_symbols, '\n');
+
     let next_symbols = &parser.text[parser.i..std::cmp::min(parser.i + 50, parser.end_index)];
-    println!(">>>>>\n{}\n-----", next_symbols);
+    let message_string = "Error position: ";
+    println!("{}{}{}", message_string, previous_symbols.replace("\n", "\\n"), next_symbols.replace("\n", "\\n"));
+
+    // todo: respect unicode?
+    for i in 0..(parser.i - trail_start + count_of_newlines + message_string.len()) {
+        print!("_")
+    }
+
+    println!("^ is the next character at the cursor\n");
 }
 
 fn eat_whitespaces_but_not_newlines(parser: &mut Parser) {
@@ -325,6 +342,8 @@ fn advance_if_possible_after_unicode(parser: &mut Parser, after: usize) {
     advance_if_possible_after_unicode_s(parser.text.as_bytes(), &mut parser.i, parser.end_index, after);
 }
 fn advance_if_possible_after_unicode_s(text: &[u8], i: &mut usize, end_index: usize, after: usize) {
+    let initial_index = i.clone();
+
     if end_index < after {
         *i = end_index;
         return;
@@ -354,6 +373,8 @@ fn advance_if_possible_after_unicode_s(text: &[u8], i: &mut usize, end_index: us
         characters_count += 1;
         *i += advance_bytes;
     }
+
+    // println!("advancing through: {}", std::str::from_utf8(&text[initial_index..*i]).unwrap());
 }
 
 enum Error {
