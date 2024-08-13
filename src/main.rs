@@ -70,11 +70,12 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
         while parser.end_index > parser.i {
             eat_whitespaces_but_not_newlines(&mut parser);
             println!("// section loop");
-            print_error_position(&parser);
 
             // Date means new entry
             let next_is_another_date_declaration = next_matches_ascii(&parser, "Date: ");
             if next_is_another_date_declaration {
+                println!("breaking @section-1");
+                print_error_position(&parser);
                 break;
             }
 
@@ -84,8 +85,13 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     eat_whitespaces_but_not_newlines(&mut parser);
                     let i = parser.i.clone();
                     advance_if_possible_after_unicode(&mut parser, i);
+                    println!("breaking @section-2");
+                    print_error_position(&parser);
                     continue;
                 }
+
+                println!("breaking @section-3");
+                print_error_position(&parser);
                 break;
             }
 
@@ -104,11 +110,14 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             let mut food_items: Vec<Item> = vec!();
 
             while parser.end_index > parser.i {
-                println!("// food loop");
                 eat_whitespaces_but_not_newlines(&mut parser);
+                println!("// food loop");
 
                 // new line means end of section
                 if next_matches_ascii(&parser, "\n") {
+                    println!("breaking @food-1");
+                    print_error_position(&parser);
+
                     let i = parser.i.clone();
                     advance_if_possible_after_unicode(&mut parser, i);
                     break;
@@ -120,6 +129,8 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                         print_error_position(&parser);
                         return Err(Error::ExpectedFoodItem);
                     }
+                    println!("breaking @food-2");
+                    print_error_position(&parser);
                     break;
                 }
 
@@ -222,6 +233,9 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
 
             let remaining_text = substring_with_length(&parser, parser.end_index - parser.i).trim(); // whitespaces
             if next_matches_ascii(&parser, "Total: ") {
+                println!("breaking @section-4");
+                print_error_position(&parser);
+
                 let newline_after_total = first_index(&parser, '\n');
                 if newline_after_total == NOT_FOUND {
                     let end_index = parser.end_index;
@@ -303,14 +317,14 @@ fn print_error_position(parser: &Parser) {
     let count_of_newlines = count_characters_in_string(previous_symbols, '\n');
 
     let next_symbols = &parser.text[parser.i..std::cmp::min(parser.i + 50, parser.end_index)];
-    let message_string = "Error position: ";
-    println!("{}{}{}", message_string, previous_symbols.replace("\n", "\\n"), next_symbols.replace("\n", "\\n"));
+    let message_string = "position...";
+    println!("{}{}\x1b[91m{}\x1b[0m...", message_string, previous_symbols.replace("\n", "\\n"), next_symbols.replace("\n", "\\n"));
 
     // todo: respect unicode?
-    for i in 0..(parser.i - trail_start + count_of_newlines + message_string.len()) {
-        print!("_")
+    let cursor_offset = parser.i - trail_start + count_of_newlines + message_string.len();
+    for i in 0..cursor_offset {
+        print!(" ")
     }
-
     println!("^ is the next character at the cursor\n");
 }
 
