@@ -3,32 +3,88 @@
 #![allow(unused_variables)] // todo: remove
 
 use std::process::exit;
-use std::fmt;
 use QuantityMeasurement::*;
 
+fn setup_ui() {
+
+    // setup terminal correctly
+    unsafe {
+        let mut tty = libc::termios {
+            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, c_line: 0,
+            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+        };
+        libc::tcgetattr(0, &mut tty);
+
+        tty.c_lflag &= !libc::ICANON;
+        tty.c_lflag &= !libc::ECHO;
+        // tty.c_lflag &= !libc::ISIG;
+        libc::tcsetattr(0, libc::TCSANOW, &tty);
+    }
+
+    let mut input: char = ' ';
+    let mut frame = 0;
+    let mut string = "";
+
+    loop {
+
+        // clear window
+        print!("{esc}c", esc = 27 as char);
+
+        // get terminal window size
+        let window_size = unsafe {
+            let mut size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
+            libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size);
+            size
+        };
+
+        println!("{}", frame);
+        println!("Window size is {} x {}, last input: {}", window_size.ws_col, window_size.ws_row, input);
+
+        let old_input = input;
+        input = unsafe { libc::getchar() } as u8 as char;
+
+        if input == 'q' {
+            break;
+        }
+
+        frame += 1;
+    }
+
+    // restore terminal
+    unsafe {
+        let mut tty = libc::termios {
+            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, c_line: 0,
+            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+        };
+        libc::tcgetattr(0, &mut tty);
+
+        tty.c_lflag |= libc::ICANON;
+        tty.c_lflag |= libc::ECHO;
+        tty.c_lflag |= libc::ISIG;
+        libc::tcsetattr(0, libc::TCSANOW, &tty);
+    }
+
+    exit(0);
+}
+
 fn main() {
-    test_advance_if_possible_after_unicode();
-    test_next_matches_ascii();
-    test_first_index();
-    test_eat_whitespaces_but_not_newlines();
-    test_get_quantity();
+    test_all();
+    setup_ui();
 
     println!("Starting download...");
-
     let response_string = make_http_request().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
         exit(1);
     });
-
     println!("File downloaded.");
 
     let entries = parse_entities(response_string).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
         exit(1);
     });
-
     println!("Parsing complete with {} entries.", entries.len());
 }
+
 
 // todo: make sure to trim whitespaces or  with newlines carefully!
 fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
@@ -379,8 +435,8 @@ enum Error {
     InvalidCalories,
 }
 
-impl fmt::Display for QuantityMeasurement{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for QuantityMeasurement{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Portion => {
                 write!(f, "PORTION")
@@ -398,8 +454,8 @@ impl fmt::Display for QuantityMeasurement{
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::InvalidResponse => {
                 write!(f, "Invalid response")
@@ -428,6 +484,8 @@ impl fmt::Display for Error {
         }
     }
 }
+
+const NOT_FOUND: i32 = -1;
 
 struct Parser {
     text: String,
@@ -597,4 +655,11 @@ fn test_get_quantity() {
     }
 }
 
-const NOT_FOUND: i32 = -1;
+fn test_all() {
+    test_advance_if_possible_after_unicode();
+    test_next_matches_ascii();
+    test_first_index();
+    test_eat_whitespaces_but_not_newlines();
+    test_get_quantity();
+}
+
