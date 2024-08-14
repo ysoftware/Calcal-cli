@@ -13,20 +13,21 @@ fn main() {
     test_eat_whitespaces_but_not_newlines();
     test_get_quantity();
 
-    println!("---- start program ------");
-
-    println!("Hello world!\n");
+    println!("Starting download...");
 
     let response_string = make_http_request().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
         exit(1);
     });
 
+    println!("File downloaded.");
 
-    parse_entities(response_string).unwrap_or_else(|error| {
+    let entries = parse_entities(response_string).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
         exit(1);
     });
+
+    println!("Parsing complete with {} entries.", entries.len());
 }
 
 // todo: make sure to trim whitespaces or  with newlines carefully!
@@ -44,7 +45,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
         let index_after_date = first_index(&parser, ' ');
         let next_is_date_declaration = next_matches_ascii(&parser, "Date: ");
         if !next_is_date_declaration || index_after_date == NOT_FOUND {
-            println!("next_matches_ascii date: {}; index_after_date: {}", next_is_date_declaration, index_after_date);
             print_error_position(&parser);
             return Err(Error::ExpectedEntry);
         }
@@ -54,8 +54,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
         eat_whitespaces_but_not_newlines(&mut parser);
         let date_newline_index = first_index(&parser, '\n');
         if date_newline_index == NOT_FOUND {
-            println!("next: {}", &parser.text[parser.i..parser.i+10]);
-            println!("date_newline_index: {}", date_newline_index);
             print_error_position(&parser);
             return Err(Error::ExpectedEOF);
         }
@@ -72,7 +70,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             // Date means new entry
             let next_is_another_date_declaration = next_matches_ascii(&parser, "Date: ");
             if next_is_another_date_declaration {
-                println!("breaking @section-1");
                 print_error_position(&parser);
                 break;
             }
@@ -83,12 +80,10 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     eat_whitespaces_but_not_newlines(&mut parser);
                     let i = parser.i.clone();
                     advance_if_possible_after_unicode(&mut parser, i);
-                    println!("breaking @section-2");
                     print_error_position(&parser);
                     continue;
                 }
 
-                println!("breaking @section-3");
                 print_error_position(&parser);
                 break;
             }
@@ -123,7 +118,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                         print_error_position(&parser);
                         return Err(Error::ExpectedFoodItem);
                     }
-                    println!("breaking @food-2");
                     print_error_position(&parser);
                     break;
                 }
@@ -210,7 +204,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 let b = &food_item.quantity;
                 let c = &food_item.measurement;
                 let d = &food_item.calories;
-                println!("* Item added: '{}' '{} ({})', '{}'", food_item.title, food_item.quantity, food_item.measurement, food_item.calories);
                 food_items.push(food_item);
             }
 
@@ -218,15 +211,12 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 id: section_name.to_string(),
                 items: food_items
             };
-            println!(":: Section added: {}", section.id);
             sections.push(section);
 
             eat_whitespaces_but_not_newlines(&mut parser);
 
             let remaining_text = substring_with_length(&parser, parser.end_index - parser.i).trim(); // whitespaces
             if next_matches_ascii(&parser, "Total: ") {
-                // println!("breaking @section-4");
-
                 let newline_after_total = first_index(&parser, '\n');
                 if newline_after_total == NOT_FOUND {
                     let end_index = parser.end_index;
@@ -246,13 +236,11 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
             date: date_string,
             sections: sections
         };
-        println!("=> Entry added: {}\n", entry.date);
         parser.entries.push(entry);
 
         eat_whitespaces_and_newlines(&mut parser);
     }
 
-    println!("Done! Added {} entrie(s)", parser.entries.len());
     return Ok(parser.entries);
 }
 
@@ -378,8 +366,6 @@ fn advance_if_possible_after_unicode_s(text: &[u8], i: &mut usize, end_index: us
         characters_count += 1;
         *i += advance_bytes;
     }
-
-    // println!("advancing through: {}", std::str::from_utf8(&text[initial_index..*i]).unwrap());
 }
 
 enum Error {
@@ -536,7 +522,7 @@ fn test_advance_if_possible_after_unicode() {
     
     let test = i == expected;
     if test {
-        println!("Test 1: OK");
+        // println!("Test 1: OK");
     } else {
         println!("Test 1: FAIL! i: {}, expected {}", i, expected);
     }
@@ -550,7 +536,7 @@ fn test_next_matches_ascii() {
     let test2 = next_matches_ascii_s(string2.as_bytes(), 0, string2.len(), "mensch");
     
     if test1 && !test2 {
-        println!("Test 2: OK");
+        // println!("Test 2: OK");
     } else {
         println!("Test 2: FAIL! 1: {test1}; 2: {test2}");
     }
@@ -568,7 +554,7 @@ fn test_first_index() {
     let test2 = index2 == expected2;
 
     if test1 && test2 {
-        println!("Test 3: OK");
+        // println!("Test 3: OK");
     } else {
         println!("Test 3: FAIL! 1: {test1}; 2: {test2}");
     }
@@ -589,7 +575,7 @@ fn test_eat_whitespaces_but_not_newlines() {
     let expected = 8;
     let test = parser.i == expected;
     if test {
-        println!("Test 4: OK");
+        // println!("Test 4: OK");
     } else {
         println!("Test 4: FAIL! i: {}, expected {}", parser.i, expected);
     }
@@ -605,7 +591,7 @@ fn test_get_quantity() {
     } else { false };
 
     if test1 && test2 {
-        println!("Test 5: OK");
+        // println!("Test 5: OK");
     } else {
         println!("Test 5: FAIL! 1: {test1}; 2: {test2}");
     }
