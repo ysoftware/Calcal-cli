@@ -18,16 +18,28 @@ fn timeout_alarm() {
     write!(&f, "a").unwrap();
 }
 
+#[cfg(target_os = "macos")]
+fn empty_termios() -> libc::termios {
+    libc::termios {
+        c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
+        c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn empty_termios() -> libc::termios {
+    libc::termios {
+        c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
+        c_line: 0,
+        c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+    }
+}
+
 fn setup_ui() {
 
     // setup terminal correctly
     unsafe {
-        let mut tty = libc::termios {
-            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
-            // linux: c_line: 0,
-            // linux: c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-        };
+        let mut tty = empty_termios();
         libc::tcgetattr(0, &mut tty);
 
         tty.c_lflag &= !libc::ICANON;
@@ -78,12 +90,7 @@ fn setup_ui() {
 
     // restore terminal
     unsafe {
-        let mut tty = libc::termios {
-            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
-            // c_line: 0,
-            // c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-        };
+        let mut tty = empty_termios();
         libc::tcgetattr(0, &mut tty);
 
         tty.c_lflag |= libc::ICANON;
