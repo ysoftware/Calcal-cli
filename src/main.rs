@@ -5,13 +5,28 @@
 use std::process::exit;
 use QuantityMeasurement::*;
 
+use std::{
+    fs::File,
+    io::{self, Write},
+    os::unix::io::FromRawFd,
+};
+use std::os::fd::AsRawFd;
+
+fn timeout_alarm() {
+    let fd = std::io::stdin().as_raw_fd();
+    let f = unsafe { File::from_raw_fd(fd) };
+    write!(&f, "a").unwrap();
+}
+
 fn setup_ui() {
 
     // setup terminal correctly
     unsafe {
         let mut tty = libc::termios {
-            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, c_line: 0,
-            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
+            // linux: c_line: 0,
+            // linux: c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
         };
         libc::tcgetattr(0, &mut tty);
 
@@ -23,7 +38,7 @@ fn setup_ui() {
 
     let mut input: char = ' ';
     let mut frame = 0;
-    let mut string = "";
+    let mut string = "".to_string();
 
     loop {
 
@@ -38,10 +53,21 @@ fn setup_ui() {
         };
 
         println!("{}", frame);
+        println!("{}", string);
         println!("Window size is {} x {}, last input: {}", window_size.ws_col, window_size.ws_row, input);
 
         let old_input = input;
-        input = unsafe { libc::getchar() } as u8 as char;
+        input = unsafe {
+            libc::alarm(1);
+            libc::signal(libc::SIGALRM, timeout_alarm as *const () as usize);
+            libc::getchar()
+        } as u8 as char;
+
+        string.push(input);
+
+        // if input == ']' {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        // }
 
         if input == 'q' {
             break;
@@ -53,8 +79,10 @@ fn setup_ui() {
     // restore terminal
     unsafe {
         let mut tty = libc::termios {
-            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, c_line: 0,
-            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+            c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
+            // c_line: 0,
+            // c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+            c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
         };
         libc::tcgetattr(0, &mut tty);
 
