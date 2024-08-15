@@ -39,7 +39,7 @@ fn enter_draw_loop(entries: Vec<EntryEntity>) {
     let mut selected_entry_index = entries.len() - 1;
 
     loop {
-        let window_size = get_window_size();
+        let (width, height) = get_window_size();
         clear_window();
 
         // draw ui 
@@ -53,16 +53,27 @@ fn enter_draw_loop(entries: Vec<EntryEntity>) {
             }
         }
 
-        println!("{} - {} kcal", selected_entry.date, entry_calories);
+        draw_line_right(
+            format!("{}", selected_entry.date), 
+            format!("{} kcal", entry_calories), 
+            width
+        );
+
         for section in &selected_entry.sections {
             let mut section_calories = 0.0;
             for item in &section.items {
                 section_calories += item.calories;
             }
-            println!("\n{} - {} kcal", section.id, section_calories);
+
+            draw_empty();
+            draw_line_right(format!("{}", section.id), format!("{}", section_calories), width);
 
             for item in &section.items {
-                println!("- {}, {} {}, {} kcal", item.title, item.quantity, item.measurement, item.calories);
+                draw_line_right(
+                    format!("- {}, {} {}", item.title, item.quantity, item.measurement),
+                    format!("{} kcal", item.calories), 
+                    width
+                );
             }
         }
 
@@ -88,6 +99,56 @@ fn enter_draw_loop(entries: Vec<EntryEntity>) {
             }
         }
     }
+}
+
+// DRAWING
+
+fn draw_empty() {
+    println!("");
+}
+
+fn draw_line_right(string_left: String, string_right: String, width: usize) {
+    let length_left = string_left.chars().count();
+    let length_right = string_right.chars().count();
+    let padding = ".. ";
+
+    if length_left + length_right + padding.len() <= width {
+        print!("{}", string_left);
+        for _ in 0..width - (length_left + length_right) { print!(" "); }
+        println!("{}", string_right);
+    } else {
+        if length_right <= width {
+            if length_right + padding.len() < width {
+                let rest_width = width - length_right - padding.len();
+                let truncated_string = truncate(string_left, rest_width);
+                print!("{}", truncated_string);
+                print!("{}", padding);
+            }
+
+            println!("{}", string_right);
+        } else {
+            let truncated_string = truncate(string_right, width);
+            println!("{}", truncated_string);
+        }
+    }
+}
+
+fn draw_line(string: String, width: usize) {
+    let length = string.chars().count();
+
+    if length <= width {
+        println!("{}", string);
+    } else {
+        let mut truncated_string = string.clone();
+        truncated_string.truncate(width);
+        println!("{}", truncated_string);
+    }
+}
+
+fn truncate(s: String, n: usize) -> String {
+    let n = s.len().min(n);
+    let m = (0..=n).rfind(|m| s.is_char_boundary(*m)).unwrap();
+    s[..m].to_string()
 }
 
 // TERMINAL
@@ -116,11 +177,11 @@ fn restore_terminal() {
     }
 }
 
-fn get_window_size() -> libc::winsize {
+fn get_window_size() -> (usize, usize) {
     unsafe {
         let mut size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
         libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size);
-        size
+        return (size.ws_col as usize, size.ws_row as usize);
     }
 }
 
