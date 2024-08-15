@@ -12,114 +12,119 @@ use std::{
 };
 use std::os::fd::AsRawFd;
 
-fn timeout_alarm() {
-    let fd = std::io::stdin().as_raw_fd();
-    let f = unsafe { File::from_raw_fd(fd) };
-    write!(&f, "a").unwrap();
-}
-
-#[cfg(target_os = "macos")]
-fn empty_termios() -> libc::termios {
-    libc::termios {
-        c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
-        c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn empty_termios() -> libc::termios {
-    libc::termios {
-        c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
-        c_line: 0,
-        c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-    }
-}
-
-fn setup_ui() {
-
-    // setup terminal correctly
-    unsafe {
-        let mut tty = empty_termios();
-        libc::tcgetattr(0, &mut tty);
-
-        tty.c_lflag &= !libc::ICANON;
-        tty.c_lflag &= !libc::ECHO;
-        // tty.c_lflag &= !libc::ISIG;
-        libc::tcsetattr(0, libc::TCSANOW, &tty);
-    }
-
-    let mut input: char = ' ';
-    let mut frame = 0;
-    let mut string = "".to_string();
-
-    loop {
-
-        // clear window
-        print!("{esc}c", esc = 27 as char);
-
-        // get terminal window size
-        let window_size = unsafe {
-            let mut size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
-            libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size);
-            size
-        };
-
-        println!("{}", frame);
-        println!("{}", string);
-        println!("Window size is {} x {}, last input: {}", window_size.ws_col, window_size.ws_row, input);
-
-        let old_input = input;
-        input = unsafe {
-            libc::alarm(1);
-            libc::signal(libc::SIGALRM, timeout_alarm as *const () as usize);
-            libc::getchar()
-        } as u8 as char;
-
-        string.push(input);
-
-        // if input == ']' {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        // }
-
-        if input == 'q' {
-            break;
-        }
-
-        frame += 1;
-    }
-
-    // restore terminal
-    unsafe {
-        let mut tty = empty_termios();
-        libc::tcgetattr(0, &mut tty);
-
-        tty.c_lflag |= libc::ICANON;
-        tty.c_lflag |= libc::ECHO;
-        tty.c_lflag |= libc::ISIG;
-        libc::tcsetattr(0, libc::TCSANOW, &tty);
-    }
-
-    exit(0);
-}
-
 fn main() {
+    prepare_terminal();
+    clear_window();
     test_all();
-    setup_ui();
 
     println!("Starting download...");
     let response_string = make_http_request().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
         exit(1);
     });
-    println!("File downloaded.");
 
     let entries = parse_entities(response_string).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
         exit(1);
     });
-    println!("Parsing complete with {} entries.", entries.len());
+
+    enter_draw_loop(entries);
+    restore_terminal();
 }
 
+fn enter_draw_loop(entries: Vec<EntryEntity>) {
+    let mut input: char = ' ';
+    let mut input_buffer = "".to_string();
+
+    let mut selected_entry_index = entries.len() - 1;
+
+    loop {
+        let window_size = get_window_size();
+        clear_window();
+
+        // draw ui 
+        let selected_entry = &entries[selected_entry_index];
+
+        let mut entry_calories = 0.0;
+
+        for section in &selected_entry.sections {
+            for item in &section.items {
+                entry_calories += item.calories;
+            }
+        }
+
+        println!("{} - {} kcal", selected_entry.date, entry_calories);
+        for section in &selected_entry.sections {
+            let mut section_calories = 0.0;
+            for item in &section.items {
+                section_calories += item.calories;
+            }
+            println!("\n{} - {} kcal", section.id, section_calories);
+
+            for item in &section.items {
+                println!("- {}, {} {}, {} kcal", item.title, item.quantity, item.measurement, item.calories);
+            }
+        }
+
+        // handle input
+        
+        let old_input = input;
+        input = unsafe { libc::getchar() } as u8 as char;
+        input_buffer.push(input);
+
+        if input == '\n' {
+            input_buffer = "".to_string();
+        }
+
+        if input as usize == 68 { // arrow left
+            if selected_entry_index - 1 > 0 {
+                selected_entry_index -= 1;
+            }
+        }
+
+        if input as usize == 67 { // arrow right
+            if selected_entry_index + 1 < entries.len() {
+                selected_entry_index += 1;
+            }
+        }
+    }
+}
+
+// TERMINAL
+
+fn clear_window() {
+    print!("{esc}c", esc = 27 as char);
+}
+
+fn prepare_terminal() {
+    unsafe {
+        let mut tty = empty_termios();
+        libc::tcgetattr(0, &mut tty);
+        tty.c_lflag &= !libc::ICANON;
+        tty.c_lflag &= !libc::ECHO;
+        libc::tcsetattr(0, libc::TCSANOW, &tty);
+    }
+}
+
+fn restore_terminal() {
+    unsafe {
+        let mut tty = empty_termios();
+        libc::tcgetattr(0, &mut tty);
+        tty.c_lflag |= libc::ICANON;
+        tty.c_lflag |= libc::ECHO;
+        libc::tcsetattr(0, libc::TCSANOW, &tty);
+    }
+}
+
+fn get_window_size() -> libc::winsize {
+    unsafe {
+        let mut size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
+        libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size);
+        size
+    }
+}
+
+// PARSING
 
 // todo: make sure to trim whitespaces or  with newlines carefully!
 fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
@@ -474,16 +479,16 @@ impl std::fmt::Display for QuantityMeasurement{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Portion => {
-                write!(f, "PORTION")
+                write!(f, "portion")
             },
             Liter => {
-                write!(f, "L")
+                write!(f, "l")
             },
             Kilogram => {
-                write!(f, "KG")
+                write!(f, "kg")
             },
             Cup => {
-                write!(f, "CUP")
+                write!(f, "cup")
             },
         }
     }
@@ -698,3 +703,19 @@ fn test_all() {
     test_get_quantity();
 }
 
+#[cfg(target_os = "macos")]
+fn empty_termios() -> libc::termios {
+    libc::termios {
+        c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
+        c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn empty_termios() -> libc::termios {
+    libc::termios {
+        c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
+        c_line: 0,
+        c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+    }
+}
