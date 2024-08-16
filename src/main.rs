@@ -3,6 +3,7 @@
 #![allow(unused_variables)] // todo: remove
 
 use std::process::exit;
+use std::cmp::{min, max};
 use QuantityMeasurement::*;
 
 use std::{
@@ -41,6 +42,10 @@ fn enter_draw_loop(entries: Vec<EntryEntity>) {
     loop {
         let (width, height) = get_window_size();
         clear_window();
+
+        if height > 50 {
+            draw_empty();
+        }
 
         // draw ui 
         let selected_entry = &entries[selected_entry_index];
@@ -108,18 +113,24 @@ fn draw_empty() {
 }
 
 fn draw_line_right(string_left: String, string_right: String, width: usize) {
+    let draw_width = min(width, 60);
+
+    let empty_width = width - draw_width;
+    let left_side_padding = if empty_width > 10 { empty_width / 2 } else { 0 };
+    for _ in 0..left_side_padding { print!(" "); }
+
     let length_left = string_left.chars().count();
     let length_right = string_right.chars().count();
     let padding = ".. ";
 
-    if length_left + length_right + padding.len() <= width {
+    if length_left + length_right + padding.len() <= draw_width {
         print!("{}", string_left);
-        for _ in 0..width - (length_left + length_right) { print!(" "); }
+        for _ in 0..draw_width - (length_left + length_right) { print!(" "); }
         println!("{}", string_right);
     } else {
-        if length_right <= width {
-            if length_right + padding.len() < width {
-                let rest_width = width - length_right - padding.len();
+        if length_right <= draw_width {
+            if length_right + padding.len() < draw_width {
+                let rest_width = draw_width - length_right - padding.len();
                 let truncated_string = truncate(string_left, rest_width);
                 print!("{}", truncated_string);
                 print!("{}", padding);
@@ -127,7 +138,7 @@ fn draw_line_right(string_left: String, string_right: String, width: usize) {
 
             println!("{}", string_right);
         } else {
-            let truncated_string = truncate(string_right, width);
+            let truncated_string = truncate(string_right, draw_width);
             println!("{}", truncated_string);
         }
     }
@@ -448,11 +459,11 @@ fn next_matches_ascii_s(bytes: &[u8], i: usize, end_index: usize, search: &str) 
 }
 
 fn print_error_position(parser: &Parser) {
-    let trail_start = std::cmp::max(parser.i-10, 0);
+    let trail_start = max(parser.i-10, 0);
     let previous_symbols = &parser.text[trail_start..parser.i];
     let count_of_newlines = count_characters_in_string(previous_symbols, '\n');
 
-    let next_symbols = &parser.text[parser.i..std::cmp::min(parser.i + 50, parser.end_index)];
+    let next_symbols = &parser.text[parser.i..min(parser.i + 50, parser.end_index)];
     let message_string = "position: ...";
     println!("{}{}\x1b[91m{}\x1b[0m...", message_string, previous_symbols.replace("\n", "\\n"), next_symbols.replace("\n", "\\n"));
 
