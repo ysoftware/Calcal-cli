@@ -29,70 +29,21 @@ fn enter_draw_loop(entries: Vec<parser::EntryEntity>) {
     let mut input: char = ' ';
     let mut input_buffer = "".to_string();
     
-    let mut needs_redraw = true;
-    let (mut width, mut height) = terminal::get_window_size();
+    let mut width = 0;
+    let mut height = 0;
     let mut selected_entry_index = entries.len() - 1;
 
     loop {
-        if needs_redraw {
-            terminal::clear_window();
-
-            if height > 40 && width > 50 {
-                draw_empty();
-            }
-
-            let selected_entry = &entries[selected_entry_index];
-
-            let mut entry_calories = 0.0;
-
-            for section in &selected_entry.sections {
-                for item in &section.items {
-                    entry_calories += item.calories;
-                }
-            }
-
-            draw_line_right(
-                format!("{}", selected_entry.date), BlackBg,
-                format!("{} kcal", entry_calories), BlueBg,
-                width, 0
-            );
-
-            for section in &selected_entry.sections {
-                let mut section_calories = 0.0;
-                for item in &section.items {
-                    section_calories += item.calories;
-                }
-
-                draw_empty();
-                draw_line_right(
-                    format!("{}", section.id), BlueBright,
-                    format!("{} kcal", section_calories), BlueBright,
-                    width, 
-                    20 // align right text in the middle of the line
-                );
-
-                for i in 0..section.items.len() {
-                    let item = &section.items[i];
-                    let left_color = if i % 2 == 1 { White } else { BlackBg };
-                    let right_color = if i % 2 == 1 { White } else { BlackBg };
-
-                    draw_line_right(
-                        format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
-                        format!("{} kcal", item.calories), right_color,
-                        width, 0
-                    );
-                }
-            }
-        }
 
         // handle input
-        let has_new_input: bool;
-        if let Some(new_char) = terminal::get_input() {
-            has_new_input = true;
+        let mut did_process_input = false;
+        if let Some(new_char) = terminal::get_input() { // todo: unicode
             input = new_char;
             input_buffer.push(input);
+            did_process_input = true;
 
             if input == '\n' {
+                did_process_input = true;
                 input_buffer = "".to_string();
             }
 
@@ -100,6 +51,7 @@ fn enter_draw_loop(entries: Vec<parser::EntryEntity>) {
                 if selected_entry_index - 1 > 0 {
                     selected_entry_index -= 1;
                 }
+                did_process_input = true;
             }
 
             if input as usize == 67 { // arrow right
@@ -107,19 +59,64 @@ fn enter_draw_loop(entries: Vec<parser::EntryEntity>) {
                     selected_entry_index += 1;
                 }
             }
-        } else {
-            has_new_input = false;
         }
 
+        // check new window size
         let (new_width, new_height) = terminal::get_window_size();
         let did_resize_window = new_width != width || new_height != height;
         width = new_width;
         height = new_height;
 
-        needs_redraw = did_resize_window || has_new_input;
-
-        if !needs_redraw {
+        // redraw ui
+        if !did_resize_window && !did_process_input {
             std::thread::sleep(std::time::Duration::from_millis(20));
+            continue;
+        }
+
+        terminal::clear_window();
+
+        if height > 40 && width > 50 { draw_empty(); }
+
+        let selected_entry = &entries[selected_entry_index];
+        let mut entry_calories = 0.0;
+
+        for section in &selected_entry.sections {
+            for item in &section.items {
+                entry_calories += item.calories;
+            }
+        }
+
+        draw_line_right(
+            format!("{}", selected_entry.date), BlackBg,
+            format!("{} kcal", entry_calories), BlueBrightBg,
+            width, 0
+        );
+
+        for section in &selected_entry.sections {
+            let mut section_calories = 0.0;
+            for item in &section.items {
+                section_calories += item.calories;
+            }
+
+            draw_empty();
+            draw_line_right(
+                format!("{}", section.id), BlueBright,
+                format!("{} kcal", section_calories), BlueBright,
+                width, 
+                20 // align right text in the middle of the line
+            );
+
+            for i in 0..section.items.len() {
+                let item = &section.items[i];
+                let left_color = if i % 2 == 1 { White } else { BlackBg };
+                let right_color = if i % 2 == 1 { White } else { BlackBg };
+
+                draw_line_right(
+                    format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                    format!("{} kcal", item.calories), right_color,
+                    width, 0
+                );
+            }
         }
     }
 }
