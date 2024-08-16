@@ -1,17 +1,7 @@
-#![allow(dead_code)] // todo: remove
-#![allow(unused_imports)] // todo: remove
-#![allow(unused_variables)] // todo: remove
-
 use std::process::exit;
 use std::cmp::{min, max};
 use QuantityMeasurement::*;
-
-use std::{
-    fs::File,
-    io::{self, Write},
-    os::unix::io::FromRawFd,
-};
-use std::os::fd::AsRawFd;
+use std::os::unix::io::AsRawFd;
 
 fn main() {
     prepare_terminal();
@@ -36,72 +26,89 @@ fn main() {
 fn enter_draw_loop(entries: Vec<EntryEntity>) {
     let mut input: char = ' ';
     let mut input_buffer = "".to_string();
-
+    
+    let mut needs_redraw = true;
+    let (mut width, mut height) = get_window_size();
     let mut selected_entry_index = entries.len() - 1;
 
     loop {
-        let (width, height) = get_window_size();
-        clear_window();
+        if needs_redraw {
+            clear_window();
 
-        if height > 50 {
-            draw_empty();
-        }
-
-        // draw ui 
-        let selected_entry = &entries[selected_entry_index];
-
-        let mut entry_calories = 0.0;
-
-        for section in &selected_entry.sections {
-            for item in &section.items {
-                entry_calories += item.calories;
-            }
-        }
-
-        draw_line_right(
-            format!("{}", selected_entry.date), 
-            format!("{} kcal", entry_calories), 
-            width
-        );
-
-        for section in &selected_entry.sections {
-            let mut section_calories = 0.0;
-            for item in &section.items {
-                section_calories += item.calories;
+            if height > 40 && width > 70 {
+                draw_empty();
             }
 
-            draw_empty();
-            draw_line_right(format!("{}", section.id), format!("{}", section_calories), width);
+            let selected_entry = &entries[selected_entry_index];
 
-            for item in &section.items {
-                draw_line_right(
-                    format!("- {}, {} {}", item.title, item.quantity, item.measurement),
-                    format!("{} kcal", item.calories), 
-                    width
-                );
+            let mut entry_calories = 0.0;
+
+            for section in &selected_entry.sections {
+                for item in &section.items {
+                    entry_calories += item.calories;
+                }
+            }
+
+            draw_line_right(
+                format!("{}", selected_entry.date), 
+                format!("{} kcal", entry_calories), 
+                width
+            );
+
+            for section in &selected_entry.sections {
+                let mut section_calories = 0.0;
+                for item in &section.items {
+                    section_calories += item.calories;
+                }
+
+                draw_empty();
+                draw_line_right(format!("{}", section.id), format!("{}", section_calories), width);
+
+                for item in &section.items {
+                    draw_line_right(
+                        format!("- {}, {} {}", item.title, item.quantity, item.measurement),
+                        format!("{} kcal", item.calories), 
+                        width
+                    );
+                }
             }
         }
 
         // handle input
-        
-        let old_input = input;
-        input = unsafe { libc::getchar() } as u8 as char;
-        input_buffer.push(input);
+        let has_new_input: bool;
+        if let Some(new_char) = get_input() {
+            has_new_input = true;
+            input = new_char;
+            input_buffer.push(input);
 
-        if input == '\n' {
-            input_buffer = "".to_string();
+            if input == '\n' {
+                input_buffer = "".to_string();
+            }
+
+            if input as usize == 68 { // arrow left
+                if selected_entry_index - 1 > 0 {
+                    selected_entry_index -= 1;
+                }
+            }
+
+            if input as usize == 67 { // arrow right
+                if selected_entry_index + 1 < entries.len() {
+                    selected_entry_index += 1;
+                }
+            }
+        } else {
+            has_new_input = false;
         }
 
-        if input as usize == 68 { // arrow left
-            if selected_entry_index - 1 > 0 {
-                selected_entry_index -= 1;
-            }
-        }
+        let (new_width, new_height) = get_window_size();
+        let did_resize_window = new_width != width || new_height != height;
+        width = new_width;
+        height = new_height;
 
-        if input as usize == 67 { // arrow right
-            if selected_entry_index + 1 < entries.len() {
-                selected_entry_index += 1;
-            }
+        needs_redraw = did_resize_window || has_new_input;
+
+        if !needs_redraw {
+            std::thread::sleep(std::time::Duration::from_millis(20));
         }
     }
 }
@@ -144,56 +151,10 @@ fn draw_line_right(string_left: String, string_right: String, width: usize) {
     }
 }
 
-fn draw_line(string: String, width: usize) {
-    let length = string.chars().count();
-
-    if length <= width {
-        println!("{}", string);
-    } else {
-        let mut truncated_string = string.clone();
-        truncated_string.truncate(width);
-        println!("{}", truncated_string);
-    }
-}
-
 fn truncate(s: String, n: usize) -> String {
     let n = s.len().min(n);
     let m = (0..=n).rfind(|m| s.is_char_boundary(*m)).unwrap();
     s[..m].to_string()
-}
-
-// TERMINAL
-
-fn clear_window() {
-    print!("{esc}c", esc = 27 as char);
-}
-
-fn prepare_terminal() {
-    unsafe {
-        let mut tty = empty_termios();
-        libc::tcgetattr(0, &mut tty);
-        tty.c_lflag &= !libc::ICANON;
-        tty.c_lflag &= !libc::ECHO;
-        libc::tcsetattr(0, libc::TCSANOW, &tty);
-    }
-}
-
-fn restore_terminal() {
-    unsafe {
-        let mut tty = empty_termios();
-        libc::tcgetattr(0, &mut tty);
-        tty.c_lflag |= libc::ICANON;
-        tty.c_lflag |= libc::ECHO;
-        libc::tcsetattr(0, libc::TCSANOW, &tty);
-    }
-}
-
-fn get_window_size() -> (usize, usize) {
-    unsafe {
-        let mut size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
-        libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size);
-        return (size.ws_col as usize, size.ws_row as usize);
-    }
 }
 
 // PARSING
@@ -275,7 +236,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
 
                 // new line means end of section
                 if next_matches_ascii(&parser, "\n") {
-                    let i = parser.i.clone();
                     advance_if_possible_after_unicode(&mut parser, 0);
                     break;
                 }
@@ -368,10 +328,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                     calories: calories_value 
                 };
 
-                let a = &food_item.title;
-                let b = &food_item.quantity;
-                let c = &food_item.measurement;
-                let d = &food_item.calories;
                 food_items.push(food_item);
             }
 
@@ -383,7 +339,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
 
             eat_whitespaces_but_not_newlines(&mut parser);
 
-            let remaining_text = substring_with_length(&parser, parser.end_index - parser.i).trim(); // whitespaces
             if next_matches_ascii(&parser, "Total: ") {
                 let newline_after_total = first_index(&parser, '\n');
                 if newline_after_total == NOT_FOUND {
@@ -392,8 +347,6 @@ fn parse_entities(string: String) -> Result<Vec<EntryEntity>, Error> {
                 } else {
                     advance_if_possible_after_unicode(&mut parser, newline_after_total as usize);
                     eat_whitespaces_but_not_newlines(&mut parser);
-
-                    let current_i = parser.i.clone();
                     advance_if_possible_after_unicode(&mut parser, 0);
                 }
                 break;
@@ -469,9 +422,7 @@ fn print_error_position(parser: &Parser) {
 
     // todo: respect unicode?
     let cursor_offset = parser.i - trail_start + count_of_newlines + message_string.len();
-    for i in 0..cursor_offset {
-        print!(" ")
-    }
+    for _ in 0..cursor_offset { print!(" ") }
     println!("^ is the next character at the cursor\n");
 }
 
@@ -503,8 +454,6 @@ fn advance_if_possible_after_unicode(parser: &mut Parser, after: usize) {
     advance_if_possible_after_unicode_s(parser.text.as_bytes(), &mut parser.i, parser.end_index, after);
 }
 fn advance_if_possible_after_unicode_s(text: &[u8], i: &mut usize, end_index: usize, after: usize) {
-    let initial_index = i.clone();
-
     if end_index < after {
         *i = end_index;
         return;
@@ -775,6 +724,8 @@ fn test_all() {
     test_get_quantity();
 }
 
+// WORKING WITH TERMINAL
+
 #[cfg(target_os = "macos")]
 fn empty_termios() -> libc::termios {
     libc::termios {
@@ -789,5 +740,70 @@ fn empty_termios() -> libc::termios {
         c_ispeed: 0, c_ospeed: 0, c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, 
         c_line: 0,
         c_cc: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+    }
+}
+
+// copied and refactored from: https://docs.rs/console/0.15.0/src/console/unix_term.rs.html#87
+fn get_input() -> Option<char> {
+    let tty_f;
+    let fd = unsafe {
+        if libc::isatty(libc::STDIN_FILENO) == 1 {
+            libc::STDIN_FILENO
+        } else {
+            tty_f = std::fs::File::open("/dev/tty").unwrap();
+            tty_f.as_raw_fd()
+        }
+    };
+
+    let mut pollfd = libc::pollfd { fd, events: libc::POLLIN, revents: 0, };
+    let ret = unsafe { libc::poll(&mut pollfd as *mut _, 1, 0) };
+    if ret < 0 { return None }
+
+    if pollfd.revents & libc::POLLIN != 0 {
+        let mut buf: [u8; 1] = [0];
+        let read = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut _, 1) };
+        if read < 0 {
+            None
+        } else if read == 0 {
+            None
+        } else if buf[0] == b'\x03' {
+            None
+        } else {
+            Some(buf[0] as char)
+        }
+    } else {
+        None
+    }
+}
+
+fn clear_window() {
+    print!("{esc}c", esc = 27 as char);
+}
+
+fn prepare_terminal() {
+    unsafe {
+        let mut tty = empty_termios();
+        libc::tcgetattr(0, &mut tty);
+        tty.c_lflag &= !libc::ICANON;
+        tty.c_lflag &= !libc::ECHO;
+        libc::tcsetattr(0, libc::TCSANOW, &tty);
+    }
+}
+
+fn restore_terminal() {
+    unsafe {
+        let mut tty = empty_termios();
+        libc::tcgetattr(0, &mut tty);
+        tty.c_lflag |= libc::ICANON;
+        tty.c_lflag |= libc::ECHO;
+        libc::tcsetattr(0, libc::TCSANOW, &tty);
+    }
+}
+
+fn get_window_size() -> (usize, usize) {
+    unsafe {
+        let mut size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
+        libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size);
+        return (size.ws_col as usize, size.ws_row as usize);
     }
 }
