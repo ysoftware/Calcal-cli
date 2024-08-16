@@ -14,10 +14,12 @@ fn main() {
         std::process::exit(1);
     });
 
+    // let now = std::time::Instant::now();
     let entries = parser::parse_entities(response_string).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
         std::process::exit(1);
     });
+    // println!("Elapsed: {:.2?}", now.elapsed());
 
     enter_draw_loop(entries);
     terminal::restore_terminal();
@@ -35,7 +37,7 @@ fn enter_draw_loop(entries: Vec<parser::EntryEntity>) {
         if needs_redraw {
             terminal::clear_window();
 
-            if height > 40 && width > 70 {
+            if height > 40 && width > 50 {
                 draw_empty();
             }
 
@@ -210,3 +212,4 @@ fn make_http_request() -> Result<String, parser::Error> {
         .to_owned())
 }
 
+// todo: first entry is missing
