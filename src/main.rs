@@ -1,6 +1,8 @@
 mod parser;
 mod terminal;
 
+use Color::*;
+
 fn main() {
     terminal::prepare_terminal();
     terminal::clear_window();
@@ -48,9 +50,9 @@ fn enter_draw_loop(entries: Vec<parser::EntryEntity>) {
             }
 
             draw_line_right(
-                format!("{}", selected_entry.date), 
-                format!("{} kcal", entry_calories), 
-                width
+                format!("{}", selected_entry.date), BlackBg,
+                format!("{} kcal", entry_calories), BlueBg,
+                width, 0
             );
 
             for section in &selected_entry.sections {
@@ -60,13 +62,22 @@ fn enter_draw_loop(entries: Vec<parser::EntryEntity>) {
                 }
 
                 draw_empty();
-                draw_line_right(format!("{}", section.id), format!("{}", section_calories), width);
+                draw_line_right(
+                    format!("{}", section.id), BlueBright,
+                    format!("{} kcal", section_calories), BlueBright,
+                    width, 
+                    20 // align right text in the middle of the line
+                );
 
-                for item in &section.items {
+                for i in 0..section.items.len() {
+                    let item = &section.items[i];
+                    let left_color = if i % 2 == 1 { White } else { BlackBg };
+                    let right_color = if i % 2 == 1 { White } else { BlackBg };
+
                     draw_line_right(
-                        format!("- {}, {} {}", item.title, item.quantity, item.measurement),
-                        format!("{} kcal", item.calories), 
-                        width
+                        format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                        format!("{} kcal", item.calories), right_color,
+                        width, 0
                     );
                 }
             }
@@ -115,8 +126,8 @@ fn draw_empty() {
     println!("");
 }
 
-fn draw_line_right(string_left: String, string_right: String, width: usize) {
-    let draw_width = std::cmp::min(width, 60);
+fn draw_line_right(string_left: String, color_left: Color, string_right: String, color_right: Color, width: usize, left_limit: usize) {
+    let draw_width = std::cmp::min(width, 50);
 
     let empty_width = width - draw_width;
     let left_side_padding = if empty_width > 10 { empty_width / 2 } else { 0 };
@@ -127,22 +138,27 @@ fn draw_line_right(string_left: String, string_right: String, width: usize) {
     let padding = ".. ";
 
     if length_left + length_right + padding.len() <= draw_width {
-        print!("{}", string_left);
-        for _ in 0..draw_width - (length_left + length_right) { print!(" "); }
-        println!("{}", string_right);
+        print!("{}{}", color_start(color_left), string_left);
+
+        let mut spacing = draw_width - (length_left + length_right);
+        if left_limit > 0 && spacing > 1 { // todo: spacing > 1? >2?
+            spacing = std::cmp::min(spacing, left_limit - (length_left));
+        }
+        for _ in 0..spacing { print!(" "); }
+
+        println!("{}{}{}", color_start(color_right), string_right, color_end);
     } else {
         if length_right <= draw_width {
             if length_right + padding.len() < draw_width {
                 let rest_width = draw_width - length_right - padding.len();
                 let truncated_string = truncate(string_left, rest_width);
-                print!("{}", truncated_string);
-                print!("{}", padding);
+                print!("{}{}{}{}", color_start(color_left), truncated_string, padding, color_end);
             }
 
-            println!("{}", string_right);
+            println!("{}{}{}", color_start(color_right), string_right, color_end);
         } else {
             let truncated_string = truncate(string_right, draw_width);
-            println!("{}", truncated_string);
+            println!("{}{}{}", color_start(color_right), truncated_string, color_end);
         }
     }
 }
@@ -156,6 +172,34 @@ fn truncate(s: String, n: usize) -> String {
         std::process::exit(1);
     }
 }
+
+// COLOR
+
+fn color_start(color: Color) -> String {
+    let addition = if color < BlackBg {
+        30
+    } else if color < BlackBright {
+        40 - (BlackBg as i32)
+    } else if color < BlackBrightBg {
+        90 - (BlackBright as i32)
+    } else {
+        100 - (BlackBrightBg as i32)
+    };
+    let code = addition + color as i32;
+    return format!("\x1b[{}m", code);
+}
+
+const color_end: &str = "\x1b[0m";
+
+#[derive(PartialEq, PartialOrd)]
+enum Color {
+    Black, Red, Green, Yellow, Blue, Magenta, Cyan, White,
+    BlackBg, RedBg, GreenBg, YellowBg, BlueBg, MagentaBg, CyanBg, WhiteBg,
+    BlackBright, RedBright, GreenBright, YellowBright, BlueBright, MagentaBright, CyanBright, WhiteBright,
+    BlackBrightBg, RedBrightBg, GreenBrightBg, YellowBrightBg, BlueBrightBg, MagentaBrightBg, CyanBrightBg, WhiteBrightBg,
+}
+
+// REQUEST
 
 fn make_http_request() -> Result<String, parser::Error> {
     Ok(minreq::get("https://whoniverse-app.com/calcal/main.php")
