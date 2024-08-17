@@ -3,6 +3,17 @@ mod terminal;
 
 use Color::*;
 
+enum State { List, Input, Calendar }
+
+struct App {
+    state: State,
+    entries: Vec<parser::EntryEntity>,
+    width: usize,
+    height: usize,
+    selected_entry_index: usize,
+    input_buffer: String,
+}
+
 fn main() {
     terminal::prepare_terminal();
     terminal::clear_window();
@@ -14,112 +25,161 @@ fn main() {
         std::process::exit(1);
     });
 
-    // let now = std::time::Instant::now();
     let entries = parser::parse_entities(response_string).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
         std::process::exit(1);
     });
-    // println!("Elapsed: {:.2?}", now.elapsed());
 
-    enter_draw_loop(entries);
+    let entries_count = entries.len() - 1; // todo: will it crash if entires are empty?
+
+    let mut app = App {
+        state: State::List,
+        entries: entries,
+        width: 0,
+        height: 0,
+        selected_entry_index: entries_count,
+        input_buffer: "".to_string(),
+    };
+
+    loop {
+        if process_input(&mut app) {
+            draw(&app);
+        } else {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
     terminal::restore_terminal();
 }
 
-fn enter_draw_loop(entries: Vec<parser::EntryEntity>) {
-    let mut input: char = ' ';
-    let mut input_buffer = "".to_string();
-    
-    let mut width = 0;
-    let mut height = 0;
-    let mut selected_entry_index = entries.len() - 1;
+fn process_window_resize(app: &mut App) -> bool {
+    let (new_width, new_height) = terminal::get_window_size();
+    let did_resize_window = new_width != app.width || new_height != app.height;
+    app.width = new_width;
+    app.height = new_height;
+    return did_resize_window;
+}
 
-    loop {
+fn process_input(app: &mut App) -> bool {
+    let did_resize_window = process_window_resize(app);
 
-        // handle input
-        let mut did_process_input = false;
-        if let Some(new_char) = terminal::get_input() { // todo: unicode
-            input = new_char;
-            input_buffer.push(input);
-            did_process_input = true;
+    let did_process_input: bool = match app.state {
+        State::List => { process_input_list(app) },
+        State::Input => { process_input_input(app) },
+        State::Calendar => { todo!() },
+    };
+    return did_resize_window || did_process_input;
+}
 
-            if input == '\n' {
-                did_process_input = true;
-                input_buffer = "".to_string();
-            }
+fn draw(app: &App) {
+    terminal::clear_window();
 
-            if input as usize == 68 { // arrow left
-                if selected_entry_index - 1 > 0 {
-                    selected_entry_index -= 1;
-                }
-                did_process_input = true;
-            }
+    // println!("{}", app.input_buffer);
 
-            if input as usize == 67 { // arrow right
-                if selected_entry_index + 1 < entries.len() {
-                    selected_entry_index += 1;
-                }
+    match app.state {
+        State::List => { draw_list(&app); },
+        State::Input => { draw_input(&app); },
+        State::Calendar => { draw_calendar(&app); },
+    }
+}
+
+// SPECIFIC VIEWS
+
+fn process_input_list(app: &mut App) -> bool {
+    let mut did_process_input = false;
+    if let Some(input) = terminal::get_input() { // todo: unicode
+        app.input_buffer.push(input);
+        did_process_input = true; // this should be inside of blocks to redraw only when needed
+                                  // but it is leading to slow scrolling through pages
+
+        if input == '\n' {
+            app.input_buffer = "".to_string();
+        }
+        else if input as usize == 68 { // arrow left
+            if app.selected_entry_index - 1 > 0 {
+                app.selected_entry_index -= 1;
             }
         }
-
-        // check new window size
-        let (new_width, new_height) = terminal::get_window_size();
-        let did_resize_window = new_width != width || new_height != height;
-        width = new_width;
-        height = new_height;
-
-        // redraw ui
-        if !did_resize_window && !did_process_input {
-            std::thread::sleep(std::time::Duration::from_millis(20));
-            continue;
-        }
-
-        terminal::clear_window();
-
-        if height > 40 && width > 50 { draw_empty(); }
-
-        let selected_entry = &entries[selected_entry_index];
-        let mut entry_calories = 0.0;
-
-        for section in &selected_entry.sections {
-            for item in &section.items {
-                entry_calories += item.calories;
+        else if input as usize == 67 { // arrow right
+            if app.selected_entry_index + 1 < app.entries.len() {
+                app.selected_entry_index += 1;
             }
         }
+        else if input == 'n' {
+            app.state = State::Input;
+        }
+    }
 
+    return did_process_input;
+}
+
+fn draw_list(app: &App) {
+    if app.height > 40 && app.width > 50 { draw_empty(); }
+
+    let selected_entry = &app.entries[app.selected_entry_index];
+    let mut entry_calories = 0.0;
+
+    for section in &selected_entry.sections {
+        for item in &section.items {
+            entry_calories += item.calories;
+        }
+    }
+
+    draw_line_right(
+        format!("{}", selected_entry.date), BlackBg,
+        format!("{} kcal", entry_calories), BlueBrightBg,
+        app.width, 0
+    );
+
+    for section in &selected_entry.sections {
+        let mut section_calories = 0.0;
+        for item in &section.items {
+            section_calories += item.calories;
+        }
+
+        draw_empty();
         draw_line_right(
-            format!("{}", selected_entry.date), BlackBg,
-            format!("{} kcal", entry_calories), BlueBrightBg,
-            width, 0
+            format!("{}", section.id), BlueBright,
+            format!("{} kcal", section_calories), BlueBright,
+            app.width, 
+            20 // align right text in the middle of the line
         );
 
-        for section in &selected_entry.sections {
-            let mut section_calories = 0.0;
-            for item in &section.items {
-                section_calories += item.calories;
-            }
+        for i in 0..section.items.len() {
+            let item = &section.items[i];
+            let left_color = if i % 2 == 1 { White } else { BlackBg };
+            let right_color = if i % 2 == 1 { White } else { BlackBg };
 
-            draw_empty();
             draw_line_right(
-                format!("{}", section.id), BlueBright,
-                format!("{} kcal", section_calories), BlueBright,
-                width, 
-                20 // align right text in the middle of the line
+                format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                format!("{} kcal", item.calories), right_color,
+                app.width, 0
             );
-
-            for i in 0..section.items.len() {
-                let item = &section.items[i];
-                let left_color = if i % 2 == 1 { White } else { BlackBg };
-                let right_color = if i % 2 == 1 { White } else { BlackBg };
-
-                draw_line_right(
-                    format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
-                    format!("{} kcal", item.calories), right_color,
-                    width, 0
-                );
-            }
         }
     }
 }
+
+fn process_input_input(app: &mut App) -> bool {
+    let mut did_process_input = false;
+    if let Some(input) = terminal::get_input() { // todo: unicode
+        app.state = State::List;
+    }
+    return did_process_input;
+}
+
+fn draw_input(app: &App) {
+    println!("Inputting shit");
+}
+
+fn process_input_calendar(app: &mut App) -> bool {
+    return false;
+}
+
+fn draw_calendar(app: &App) {
+
+}
+
+// DRAW TEXT
 
 fn draw_empty() {
     println!("");
@@ -190,6 +250,7 @@ fn color_start(color: Color) -> String {
 
 const color_end: &str = "\x1b[0m";
 
+#[allow(dead_code)]
 #[derive(PartialEq, PartialOrd)]
 enum Color {
     Black, Red, Green, Yellow, Blue, Magenta, Cyan, White,
