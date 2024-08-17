@@ -1,11 +1,12 @@
 mod parser;
 mod terminal;
-
-use Color::*;
+use terminal::{ Color, Color::*, color_start, COLOR_END };
 
 enum State { List, Input, Calendar }
+enum InputResult { ShouldRedraw, ShouldExit, None }
 
 struct App {
+    should_exit: bool,
     state: State,
     entries: Vec<parser::EntryEntity>,
     width: usize,
@@ -33,6 +34,7 @@ fn main() {
     let entries_count = entries.len() - 1; // todo: will it crash if entires are empty?
 
     let mut app = App {
+        should_exit: false,
         state: State::List,
         entries: entries,
         width: 0,
@@ -43,12 +45,12 @@ fn main() {
 
     loop {
         if process_input(&mut app) {
+            if app.should_exit { break }
             draw(&app);
         } else {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
     }
-
     terminal::restore_terminal();
 }
 
@@ -63,18 +65,20 @@ fn process_window_resize(app: &mut App) -> bool {
 fn process_input(app: &mut App) -> bool {
     let did_resize_window = process_window_resize(app);
 
-    let did_process_input: bool = match app.state {
-        State::List => { process_input_list(app) },
-        State::Input => { process_input_input(app) },
-        State::Calendar => { todo!() },
-    };
-    return did_resize_window || did_process_input;
+    if let Some(input) = terminal::get_input() { // todo: unicode
+        let did_process_input: bool = match app.state {
+            State::List => { process_input_list(app, input) },
+            State::Input => { process_input_input(app, input) },
+            State::Calendar => { process_input_calendar(app, input) },
+        };
+        return did_resize_window || did_process_input;
+    }
+    
+    return did_resize_window;
 }
 
 fn draw(app: &App) {
     terminal::clear_window();
-
-    // println!("{}", app.input_buffer);
 
     match app.state {
         State::List => { draw_list(&app); },
@@ -85,31 +89,34 @@ fn draw(app: &App) {
 
 // SPECIFIC VIEWS
 
-fn process_input_list(app: &mut App) -> bool {
+fn process_input_list(app: &mut App, input: char) -> bool {
     let mut did_process_input = false;
-    if let Some(input) = terminal::get_input() { // todo: unicode
-        app.input_buffer.push(input);
-        did_process_input = true; // this should be inside of blocks to redraw only when needed
-                                  // but it is leading to slow scrolling through pages
+    app.input_buffer.push(input);
+    did_process_input = true; // this should be inside of blocks to redraw only when needed
+                              // but it is leading to slow scrolling through pages
 
-        if input == '\n' {
-            app.input_buffer = "".to_string();
-        }
-        else if input as usize == 68 { // arrow left
-            if app.selected_entry_index - 1 > 0 {
-                app.selected_entry_index -= 1;
-            }
-        }
-        else if input as usize == 67 { // arrow right
-            if app.selected_entry_index + 1 < app.entries.len() {
-                app.selected_entry_index += 1;
-            }
-        }
-        else if input == 'n' {
-            app.state = State::Input;
+    if input == '\n' {
+        app.input_buffer = "".to_string();
+    }
+    else if input as usize == 68 { // arrow left
+        if app.selected_entry_index - 1 > 0 {
+            app.selected_entry_index -= 1;
         }
     }
-
+    else if input as usize == 67 { // arrow right
+        if app.selected_entry_index + 1 < app.entries.len() {
+            app.selected_entry_index += 1;
+        }
+    }
+    else if input == 'n' {
+        app.state = State::Input;
+    } 
+    else if input == 'c' {
+        app.state = State::Calendar;
+    }
+    else if input == 'q' {
+        app.should_exit = true;
+    }
     return did_process_input;
 }
 
@@ -159,24 +166,28 @@ fn draw_list(app: &App) {
     }
 }
 
-fn process_input_input(app: &mut App) -> bool {
+fn process_input_input(app: &mut App, input: char) -> bool {
     let mut did_process_input = false;
-    if let Some(input) = terminal::get_input() { // todo: unicode
+
+    if input == 'x' {
         app.state = State::List;
     }
-    return did_process_input;
+    return true;
 }
 
 fn draw_input(app: &App) {
     println!("Inputting shit");
 }
 
-fn process_input_calendar(app: &mut App) -> bool {
-    return false;
+fn process_input_calendar(app: &mut App, input: char) -> bool {
+    if input == 'x' {
+        app.state = State::List;
+    }
+    return true;
 }
 
 fn draw_calendar(app: &App) {
-
+    println!("Calendar");
 }
 
 // DRAW TEXT
@@ -205,19 +216,19 @@ fn draw_line_right(string_left: String, color_left: Color, string_right: String,
         }
         for _ in 0..spacing { print!(" "); }
 
-        println!("{}{}{}", color_start(color_right), string_right, color_end);
+        println!("{}{}{}", color_start(color_right), string_right, COLOR_END);
     } else {
         if length_right <= draw_width {
             if length_right + padding.len() < draw_width {
                 let rest_width = draw_width - length_right - padding.len();
                 let truncated_string = truncate(string_left, rest_width);
-                print!("{}{}{}{}", color_start(color_left), truncated_string, padding, color_end);
+                print!("{}{}{}{}", color_start(color_left), truncated_string, padding, COLOR_END);
             }
 
-            println!("{}{}{}", color_start(color_right), string_right, color_end);
+            println!("{}{}{}", color_start(color_right), string_right, COLOR_END);
         } else {
             let truncated_string = truncate(string_right, draw_width);
-            println!("{}{}{}", color_start(color_right), truncated_string, color_end);
+            println!("{}{}{}", color_start(color_right), truncated_string, COLOR_END);
         }
     }
 }
@@ -230,33 +241,6 @@ fn truncate(s: String, n: usize) -> String {
         println!("Unable to truncate string \"{}\" by {} characters.", s, n);
         std::process::exit(1);
     }
-}
-
-// COLOR
-
-fn color_start(color: Color) -> String {
-    let addition = if color < BlackBg {
-        30
-    } else if color < BlackBright {
-        40 - (BlackBg as i32)
-    } else if color < BlackBrightBg {
-        90 - (BlackBright as i32)
-    } else {
-        100 - (BlackBrightBg as i32)
-    };
-    let code = addition + color as i32;
-    return format!("\x1b[{}m", code);
-}
-
-const color_end: &str = "\x1b[0m";
-
-#[allow(dead_code)]
-#[derive(PartialEq, PartialOrd)]
-enum Color {
-    Black, Red, Green, Yellow, Blue, Magenta, Cyan, White,
-    BlackBg, RedBg, GreenBg, YellowBg, BlueBg, MagentaBg, CyanBg, WhiteBg,
-    BlackBright, RedBright, GreenBright, YellowBright, BlueBright, MagentaBright, CyanBright, WhiteBright,
-    BlackBrightBg, RedBrightBg, GreenBrightBg, YellowBrightBg, BlueBrightBg, MagentaBrightBg, CyanBrightBg, WhiteBrightBg,
 }
 
 // REQUEST

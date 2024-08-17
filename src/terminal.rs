@@ -1,4 +1,5 @@
 use std::os::unix::io::AsRawFd;
+use Color::*;
 
 #[cfg(target_os = "macos")]
 pub fn empty_termios() -> libc::termios {
@@ -60,6 +61,7 @@ pub fn prepare_terminal() {
         libc::tcgetattr(0, &mut tty);
         tty.c_lflag &= !libc::ICANON;
         tty.c_lflag &= !libc::ECHO;
+        // tty.c_lflag &= !libc::ISIG;
         libc::tcsetattr(0, libc::TCSANOW, &tty);
     }
 }
@@ -70,6 +72,7 @@ pub fn restore_terminal() {
         libc::tcgetattr(0, &mut tty);
         tty.c_lflag |= libc::ICANON;
         tty.c_lflag |= libc::ECHO;
+        // tty.c_lflag |= libc::ISIG;
         libc::tcsetattr(0, libc::TCSANOW, &tty);
     }
 }
@@ -80,4 +83,29 @@ pub fn get_window_size() -> (usize, usize) {
         libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size);
         return (size.ws_col as usize, size.ws_row as usize);
     }
+}
+
+pub fn color_start(color: Color) -> String {
+    let addition = if color < BlackBg {
+        30
+    } else if color < BlackBright {
+        40 - (BlackBg as i32)
+    } else if color < BlackBrightBg {
+        90 - (BlackBright as i32)
+    } else {
+        100 - (BlackBrightBg as i32)
+    };
+    let code = addition + color as i32;
+    return format!("\x1b[{}m", code);
+}
+
+pub const COLOR_END: &str = "\x1b[0m";
+
+#[allow(dead_code)]
+#[derive(PartialEq, PartialOrd)]
+pub enum Color {
+    Black, Red, Green, Yellow, Blue, Magenta, Cyan, White,
+    BlackBg, RedBg, GreenBg, YellowBg, BlueBg, MagentaBg, CyanBg, WhiteBg,
+    BlackBright, RedBright, GreenBright, YellowBright, BlueBright, MagentaBright, CyanBright, WhiteBright,
+    BlackBrightBg, RedBrightBg, GreenBrightBg, YellowBrightBg, BlueBrightBg, MagentaBrightBg, CyanBrightBg, WhiteBrightBg,
 }
