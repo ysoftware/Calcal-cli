@@ -295,13 +295,18 @@ fn draw_calendar(app: &App) {
         return;
     }
 
+    let cell_target_width = if app.width > 48 { 6 }
+    else if app.width > 33 { 4 }
+    else { 2 };
+
+    let spacing = if app.width > 33 { 1 } else { 0 };
+
     let max_draw_width = std::cmp::min(app.width, 50);
-    let spacing = 1;
-    let cell_width = std::cmp::min(6, (max_draw_width - spacing * 6) / 7);
+    let cell_width = std::cmp::min(cell_target_width, (max_draw_width - spacing * 6) / 7);
     let draw_width = (cell_width * 7) + (spacing * 6);
 
     let empty_width = app.width - draw_width;
-    let left_side_spacing = if empty_width > 10 { empty_width / 2 } else { 0 };
+    let left_side_spacing = if empty_width > 1 { empty_width / 2 } else { 0 };
 
     draw_empty();
 
@@ -318,11 +323,28 @@ fn draw_calendar(app: &App) {
 
             for _ in 0..left_side_spacing { print!(" "); }
             for j in 0..7 {
-                print!("{} {} {}", color_start(&row[j].color), &row[j].text, COLOR_END);
-                if j < 7 { for _ in 0..spacing { print!(" "); } }
+                if cell_width < 4 {
+                    print!("{}", color_start(&row[j].color)); 
+                        for _ in 0..cell_width { print!(" ") };
+                     print!("{}", COLOR_END);
+                } else {
+                    let text_length = row[j].text.len();
+                    let padding_start = (cell_width - text_length) / 2;
+                    let padding_end = cell_width - text_length - padding_start;
+
+                    print!("{}", color_start(&row[j].color));
+                    for _ in 0..padding_start { print!(" ") };
+                    print!("{}", &row[j].text);
+                    for _ in 0..padding_end { print!(" ") };
+                    print!("{}", COLOR_END);
+                    if j < 6 { for _ in 0..spacing { print!(" "); } }
+                }
             }
             println!("");
-            draw_empty();
+
+            if cell_width >= 4 {
+                draw_empty();
+            }
         }
     }
 }
@@ -510,11 +532,13 @@ fn draw_line_right(
     string_right: String,
     color_right: Color,
     window_width: usize,
-    draw_width: usize,
+    max_draw_width: usize,
     left_limit: usize
 ) {
+    let draw_width = std::cmp::min(max_draw_width, window_width);
     let empty_width = window_width - draw_width;
-    let left_side_padding = if empty_width > 10 { empty_width / 2 } else { 0 };
+
+    let left_side_padding = if empty_width > 1 { empty_width / 2 } else { 0 };
     for _ in 0..left_side_padding { print!(" "); }
 
     let length_left = string_left.chars().count();
