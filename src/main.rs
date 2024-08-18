@@ -115,7 +115,9 @@ fn process_input_list(app: &mut App, input: char) -> bool {
     else if input == 'c' {
         app.state = State::Calendar;
 
-        app.calendar = vec![
+        app.calendar = process_calendar_data(&app.entries);
+
+        let _calendar = vec![
             CalendarMonth {
                 title: "April".to_string(),
                 subtitle: "∅ 2238".to_string(),
@@ -200,7 +202,7 @@ fn process_input_list(app: &mut App, input: char) -> bool {
                     ],
                 ],
             },
-        ]
+        ];
     }
     else if input == 'q' {
         app.should_exit = true;
@@ -322,6 +324,177 @@ fn draw_calendar(app: &App) {
             println!("");
             draw_empty();
         }
+    }
+}
+
+fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMonth> {
+    let mut months = vec![];
+
+    if entries.len() == 0 {
+        return months;
+    }
+
+    let mut current_month = get_month_component(&entries[0].date);
+    let mut rows: Vec<[CalendarCell; 7]> = vec![];
+
+    let mut i = 0;
+    while i < entries.len() {
+        let mut columns: [CalendarCell; 7] = [ // cleanup: this is dumb, but I can't clone a String?
+            CalendarCell { color: White, text: "    ".to_string() },
+            CalendarCell { color: White, text: "    ".to_string() },
+            CalendarCell { color: White, text: "    ".to_string() },
+            CalendarCell { color: White, text: "    ".to_string() },
+            CalendarCell { color: White, text: "    ".to_string() },
+            CalendarCell { color: White, text: "    ".to_string() },
+            CalendarCell { color: White, text: "    ".to_string() },
+        ];
+
+        let mut columns_added = false;
+        for w in 0..=6 {
+            if entries.len() <= i {
+                i += 1;
+                continue;
+            }
+
+            let month = get_month_component(&entries[i].date);
+
+            if current_month != month {
+                if rows.len() > 0 || columns_added {
+                    if columns_added {
+                        rows.push(columns);
+
+                        columns = [ // cleanup: this is dumb, but I can't clone a String?
+                            CalendarCell { color: White, text: "    ".to_string() },
+                            CalendarCell { color: White, text: "    ".to_string() },
+                            CalendarCell { color: White, text: "    ".to_string() },
+                            CalendarCell { color: White, text: "    ".to_string() },
+                            CalendarCell { color: White, text: "    ".to_string() },
+                            CalendarCell { color: White, text: "    ".to_string() },
+                            CalendarCell { color: White, text: "    ".to_string() },
+                        ];
+                    }
+
+                    let mut total = 0.0;
+                    let mut count = 0;
+                    for row in &rows {
+                        for cell in row {
+                            if cell.text.trim().len() > 0 {
+                                total += cell.text.trim().parse::<f32>().unwrap();
+                                count += 1;
+                            }
+                        }
+                    }
+                    let average_calories = total / count as f32;
+
+                    months.push(CalendarMonth {
+                        title: month_from_number(current_month).to_string(),
+                        subtitle: format!("∅ {:.0}", average_calories),
+                        rows: rows
+                    });
+                    rows = vec![];
+                    columns_added = false;
+                }
+                current_month = month;
+                continue;
+            }
+
+            let mut calories = 0.0;
+            for section in &entries[i].sections {
+                for item in &section.items {
+                    calories += item.calories;
+                }
+            }
+
+            let weekday = get_weekday_component(&entries[i].date);
+            
+            if weekday == w {
+                columns_added = true;
+                columns[w as usize] = CalendarCell {
+                    color: color_for_calories(calories),
+                    text: format!("{}", calories)
+                };
+                i += 1;
+                continue;
+            } 
+        }
+
+        if columns_added {
+            rows.push(columns);
+        }
+    }
+
+    if rows.len() > 0 {
+        let mut total = 0.0;
+        let mut count = 0;
+        for row in &rows {
+            for cell in row {
+                if cell.text.trim().len() > 0 {
+                    total += cell.text.trim().parse::<f32>().unwrap();
+                    count += 1;
+                }
+            }
+        }
+        let average_calories = total / count as f32;
+
+        months.push(
+            CalendarMonth {
+                title: month_from_number(current_month).to_string(),
+                subtitle: format!("∅ {:.0}", average_calories),
+                rows: rows
+            }
+        );
+        rows = vec![];
+    }
+    
+    // std::process::exit(1);
+    return months;
+}
+
+fn get_month_component(date: &str) -> i32 {
+    use chrono::{NaiveDate, Datelike};
+    let parsed_date = NaiveDate::parse_from_str(date, "%d %B %Y").unwrap();
+    return parsed_date.month() as i32;
+}
+
+fn get_weekday_component(date: &str) -> i32 { // 0 - 6
+    use chrono::{NaiveDate, Datelike};
+    let parsed_date = NaiveDate::parse_from_str(date, "%d %B %Y").unwrap();
+    return parsed_date.weekday() as i32;
+}
+
+fn month_from_number(month: i32) -> &'static str {
+   match month {
+       1 => { return "January" },
+       2 => { return "February" },
+       3 => { return "March" },
+       4 => { return "April" },
+       5 => { return "May" },
+       6 => { return "June" },
+       7 => { return "July" },
+       8 => { return "August" },
+       9 => { return "September" },
+       10 => { return "October" },
+       11 => { return "November" },
+       12 => { return "December" },
+
+       i32::MIN..=0_i32 => { return "" },
+       13..=i32::MAX => { return "" },
+   }
+}
+
+fn color_for_calories(calories: f32) -> Color {
+    if calories <= 1400.0 {
+        return BlackBg;
+    } else if calories <= 1900.0 {
+        return GreenBrightBg;
+    } else if calories <= 2200.0 {
+        return GreenBg;
+    } else if calories <= 2400.0 {
+        return YellowBrightBg;
+    } else if calories <= 2900.0 {
+        return RedBrightBg;
+    } else {
+        return RedBg;
     }
 }
 

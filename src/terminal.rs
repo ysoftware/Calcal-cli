@@ -102,7 +102,7 @@ pub fn color_start(color: &Color) -> String {
 pub const COLOR_END: &str = "\x1b[0m";
 
 #[allow(dead_code)]
-#[derive(PartialEq, PartialOrd, Clone)]
+#[derive(PartialEq, PartialOrd, Clone, Copy)]
 pub enum Color {
     Black, Red, Green, Yellow, Blue, Magenta, Cyan, White,
     BlackBg, RedBg, GreenBg, YellowBg, BlueBg, MagentaBg, CyanBg, WhiteBg,
