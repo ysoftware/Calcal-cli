@@ -3,7 +3,6 @@ mod terminal;
 use terminal::{ Color, Color::*, color_start, COLOR_END };
 
 enum State { List, Input, Calendar }
-enum InputResult { ShouldRedraw, ShouldExit, None }
 
 struct App {
     should_exit: bool,
@@ -13,6 +12,7 @@ struct App {
     height: usize,
     selected_entry_index: usize,
     input_buffer: String,
+    calendar: Vec<CalendarMonth>,
 }
 
 fn main() {
@@ -41,6 +41,7 @@ fn main() {
         height: 0,
         selected_entry_index: entries_count,
         input_buffer: "".to_string(),
+        calendar: vec![],
     };
 
     loop {
@@ -90,7 +91,7 @@ fn draw(app: &App) {
 // SPECIFIC VIEWS
 
 fn process_input_list(app: &mut App, input: char) -> bool {
-    let mut did_process_input = false;
+    let did_process_input: bool;
     app.input_buffer.push(input);
     did_process_input = true; // this should be inside of blocks to redraw only when needed
                               // but it is leading to slow scrolling through pages
@@ -113,6 +114,93 @@ fn process_input_list(app: &mut App, input: char) -> bool {
     } 
     else if input == 'c' {
         app.state = State::Calendar;
+
+        app.calendar = vec![
+            CalendarMonth {
+                title: "April".to_string(),
+                subtitle: "∅ 2238".to_string(),
+                rows: vec![
+                    [
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: YellowBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: RedBg, text: "1234".to_string() },
+                    ],
+                    [
+                        CalendarCell { color: GreenBg, text: "    ".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: RedBg, text: "1234".to_string() },
+                    ],
+                    [
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: YellowBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: RedBrightBg, text: "1234".to_string() },
+                    ],
+                    [
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: YellowBg, text: "1234".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                    ],
+                ],
+            },
+            CalendarMonth {
+                title: "May".to_string(),
+                subtitle: "∅ 2375".to_string(),
+                rows: vec![
+                    [
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                        CalendarCell { color: RedBg, text: "1234".to_string() },
+                        CalendarCell { color: YellowBg, text: "1234".to_string() },
+                    ],
+                    [
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: YellowBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: RedBg, text: "1234".to_string() },
+                    ],
+                    [
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: YellowBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: RedBg, text: "1234".to_string() },
+                    ],
+                    [
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: GreenBg, text: "1234".to_string() },
+                        CalendarCell { color: White, text: "    ".to_string() },
+                    ],
+                ],
+            },
+        ]
     }
     else if input == 'q' {
         app.should_exit = true;
@@ -121,6 +209,7 @@ fn process_input_list(app: &mut App, input: char) -> bool {
 }
 
 fn draw_list(app: &App) {
+    const DRAW_WIDTH: usize = 52;
     if app.height > 40 && app.width > 50 { draw_empty(); }
 
     let selected_entry = &app.entries[app.selected_entry_index];
@@ -135,7 +224,7 @@ fn draw_list(app: &App) {
     draw_line_right(
         format!("{}", selected_entry.date), BlackBg,
         format!("{} kcal", entry_calories), BlueBrightBg,
-        app.width, 0
+        app.width, DRAW_WIDTH, 0
     );
 
     for section in &selected_entry.sections {
@@ -148,7 +237,7 @@ fn draw_list(app: &App) {
         draw_line_right(
             format!("{}", section.id), BlueBright,
             format!("{} kcal", section_calories), BlueBright,
-            app.width, 
+            app.width, DRAW_WIDTH,
             20 // align right text in the middle of the line
         );
 
@@ -160,23 +249,35 @@ fn draw_list(app: &App) {
             draw_line_right(
                 format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
                 format!("{} kcal", item.calories), right_color,
-                app.width, 0
+                app.width, DRAW_WIDTH, 0
             );
         }
     }
 }
 
 fn process_input_input(app: &mut App, input: char) -> bool {
-    let mut did_process_input = false;
-
     if input == 'x' {
         app.state = State::List;
     }
     return true;
 }
 
-fn draw_input(app: &App) {
+fn draw_input(_app: &App) {
     println!("Inputting shit");
+}
+
+// CALENDAR
+
+struct CalendarMonth {
+    title: String,
+    subtitle: String,
+    rows: Vec<[CalendarCell; 7]>
+}
+
+#[derive(Clone)]
+struct CalendarCell {
+    color: Color,
+    text: String
 }
 
 fn process_input_calendar(app: &mut App, input: char) -> bool {
@@ -187,7 +288,41 @@ fn process_input_calendar(app: &mut App, input: char) -> bool {
 }
 
 fn draw_calendar(app: &App) {
-    println!("Calendar");
+    if app.calendar.len() == 0 {
+        println!("Calendar is empty");
+        return;
+    }
+
+    let max_draw_width = std::cmp::min(app.width, 50);
+    let spacing = 1;
+    let cell_width = std::cmp::min(6, (max_draw_width - spacing * 6) / 7);
+    let draw_width = (cell_width * 7) + (spacing * 6);
+
+    let empty_width = app.width - draw_width;
+    let left_side_spacing = if empty_width > 10 { empty_width / 2 } else { 0 };
+
+    draw_empty();
+
+    for month in &app.calendar {
+        draw_line_right(
+            month.title.to_string(), White,
+            month.subtitle.to_string(), White,
+            app.width, draw_width, 0
+        );
+        draw_empty();
+        
+        for i in 0..month.rows.len() {
+            let row = &month.rows[i];
+
+            for _ in 0..left_side_spacing { print!(" "); }
+            for j in 0..7 {
+                print!("{} {} {}", color_start(&row[j].color), &row[j].text, COLOR_END);
+                if j < 7 { for _ in 0..spacing { print!(" "); } }
+            }
+            println!("");
+            draw_empty();
+        }
+    }
 }
 
 // DRAW TEXT
@@ -196,10 +331,16 @@ fn draw_empty() {
     println!("");
 }
 
-fn draw_line_right(string_left: String, color_left: Color, string_right: String, color_right: Color, width: usize, left_limit: usize) {
-    let draw_width = std::cmp::min(width, 50);
-
-    let empty_width = width - draw_width;
+fn draw_line_right(
+    string_left: String,
+    color_left: Color,
+    string_right: String,
+    color_right: Color,
+    window_width: usize,
+    draw_width: usize,
+    left_limit: usize
+) {
+    let empty_width = window_width - draw_width;
     let left_side_padding = if empty_width > 10 { empty_width / 2 } else { 0 };
     for _ in 0..left_side_padding { print!(" "); }
 
@@ -208,7 +349,7 @@ fn draw_line_right(string_left: String, color_left: Color, string_right: String,
     let padding = ".. ";
 
     if length_left + length_right + padding.len() <= draw_width {
-        print!("{}{}", color_start(color_left), string_left);
+        print!("{}{}", color_start(&color_left), string_left);
 
         let mut spacing = draw_width - (length_left + length_right);
         if left_limit > 0 && spacing > 1 { // todo: spacing > 1? >2?
@@ -216,19 +357,19 @@ fn draw_line_right(string_left: String, color_left: Color, string_right: String,
         }
         for _ in 0..spacing { print!(" "); }
 
-        println!("{}{}{}", color_start(color_right), string_right, COLOR_END);
+        println!("{}{}{}", color_start(&color_right), string_right, COLOR_END);
     } else {
         if length_right <= draw_width {
             if length_right + padding.len() < draw_width {
                 let rest_width = draw_width - length_right - padding.len();
                 let truncated_string = truncate(string_left, rest_width);
-                print!("{}{}{}{}", color_start(color_left), truncated_string, padding, COLOR_END);
+                print!("{}{}{}{}", color_start(&color_left), truncated_string, padding, COLOR_END);
             }
 
-            println!("{}{}{}", color_start(color_right), string_right, COLOR_END);
+            println!("{}{}{}", color_start(&color_right), string_right, COLOR_END);
         } else {
             let truncated_string = truncate(string_right, draw_width);
-            println!("{}{}{}", color_start(color_right), truncated_string, COLOR_END);
+            println!("{}{}{}", color_start(&color_right), truncated_string, COLOR_END);
         }
     }
 }

@@ -85,24 +85,24 @@ pub fn get_window_size() -> (usize, usize) {
     }
 }
 
-pub fn color_start(color: Color) -> String {
-    let addition = if color < BlackBg {
+pub fn color_start(color: &Color) -> String {
+    let addition = if *color < BlackBg {
         30
-    } else if color < BlackBright {
+    } else if *color < BlackBright {
         40 - (BlackBg as i32)
-    } else if color < BlackBrightBg {
+    } else if *color < BlackBrightBg {
         90 - (BlackBright as i32)
     } else {
         100 - (BlackBrightBg as i32)
     };
-    let code = addition + color as i32;
+    let code = addition + color.clone() as i32;
     return format!("\x1b[{}m", code);
 }
 
 pub const COLOR_END: &str = "\x1b[0m";
 
 #[allow(dead_code)]
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, PartialOrd, Clone)]
 pub enum Color {
     Black, Red, Green, Yellow, Blue, Magenta, Cyan, White,
     BlackBg, RedBg, GreenBg, YellowBg, BlueBg, MagentaBg, CyanBg, WhiteBg,
