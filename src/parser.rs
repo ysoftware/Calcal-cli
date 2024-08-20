@@ -28,6 +28,7 @@ pub struct EntrySectionEntity {
     pub items: Vec<Item>,
 }
 
+#[derive(Clone)]
 pub struct Item {
     pub title: String,
     pub quantity: f32,
@@ -35,7 +36,7 @@ pub struct Item {
     pub calories: f32,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum QuantityMeasurement {
     Portion,
     Liter,

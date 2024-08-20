@@ -33,6 +33,15 @@ fn main() {
 
     let entries_count = entries.len() - 1; // todo: will it crash if entires are empty?
 
+    let mut all_items: Vec<*const parser::Item> = vec![];
+    for entry in &entries {
+        for section in &entry.sections {
+            for item in &section.items {
+                all_items.push(item);
+            }
+        }
+    }
+
     let mut app = App {
         should_exit: false,
         state: State::List,
@@ -41,9 +50,11 @@ fn main() {
         height: 0,
         selected_entry_index: entries_count,
         input: Input {
-            should_input_section_name: false,
+            state: InputState::Name,
             query: "".to_string(),
-            suggestions: vec![],
+            completions: vec![],
+            filtered_completions: vec![],
+            all_items: all_items,
         },
         calendar: vec![],
     };
@@ -111,8 +122,19 @@ fn process_input_list(app: &mut App, input: char) -> bool {
     }
     else if input == 'i' {
         app.state = State::Input;
-    } 
-    else if input == 'c' {
+        app.input.state = InputState::Name;
+    } else if input == 's' { 
+        app.state = State::Input;
+        app.input.state = InputState::SectionName;
+        app.input.completions = [ // cleanup: this is dumb
+            "Breakfast".to_string(), 
+            "Lunch".to_string(), 
+            "Dinner".to_string(), 
+            "Snack".to_string(), 
+            "Snack 2".to_string()
+        ].to_vec();
+        refresh_completions(app);
+    } else if input == 'c' {
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
     }
@@ -172,9 +194,29 @@ fn draw_list(app: &App) {
 // INPUT
 
 struct Input {
-    should_input_section_name: bool,
+    state: InputState,
     query: String,
-    suggestions: Vec<String>,
+    completions: Vec<String>,
+    filtered_completions: Vec<String>,
+    all_items: Vec<*const parser::Item>,
+}
+
+enum InputState {
+    SectionName, Name, Quantity, Calories
+}
+
+fn refresh_completions(app: &mut App) {
+    let clean_query = app.input.query.to_lowercase().to_string();
+    if clean_query.len() > 0 {
+        app.input.filtered_completions = vec![];
+        for completion in &app.input.completions {
+            if completion.to_lowercase().contains(&clean_query) {
+                app.input.filtered_completions.push(completion.clone());
+            }
+        }
+    } else {
+        app.input.filtered_completions = app.input.completions.clone();
+    }
 }
 
 fn process_input_input(app: &mut App, input: char) -> bool {
@@ -187,30 +229,18 @@ fn process_input_input(app: &mut App, input: char) -> bool {
         app.input.query.push(input);
     }
 
-    let clean_query = app.input.query.to_lowercase().to_string();
-    app.input.suggestions = vec![];
-
-    for entry in &app.entries {
-        for section in &entry.sections {
-            for item in &section.items {
-                if item.title.to_lowercase().to_string().contains(&clean_query) {
-                    app.input.suggestions.push(item.title.clone());
-                }
-            }
-        }
-    }
-
+    refresh_completions(app);
     return true;
 }
 
 fn draw_input(app: &App) {
     const DRAW_WIDTH: usize = 50;
 
-    let used_lines = std::cmp::min(app.height, app.input.suggestions.len() + 1);
+    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 1);
     for _ in 0..app.height-used_lines { draw_empty(); }
 
-    for suggestion in &app.input.suggestions {
-        draw_line(format!("{}", suggestion), BlackBg, app.width, DRAW_WIDTH, 0);
+    for completion in &app.input.filtered_completions {
+        draw_line(format!("{}", completion), BlackBg, app.width, DRAW_WIDTH, 0);
     }
 
     draw_line(format!("> {}", app.input.query), BlackBg, app.width, DRAW_WIDTH, 0);
