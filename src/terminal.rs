@@ -30,6 +30,8 @@ pub fn get_input() -> Option<char> {
         }
     };
 
+    // todo: can't get to type umlaut on mac
+
     let mut pollfd = libc::pollfd { fd, events: libc::POLLIN, revents: 0, };
     let ret = unsafe { libc::poll(&mut pollfd as *mut _, 1, 0) };
     if ret < 0 { return None }
