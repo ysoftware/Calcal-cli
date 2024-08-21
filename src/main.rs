@@ -114,95 +114,7 @@ fn process_input_list(app: &mut App, input: char) -> bool {
     } 
     else if input == 'c' {
         app.state = State::Calendar;
-
         app.calendar = process_calendar_data(&app.entries);
-
-        let _calendar = vec![
-            CalendarMonth {
-                title: "April".to_string(),
-                subtitle: "∅ 2238".to_string(),
-                rows: vec![
-                    [
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: YellowBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: RedBg, text: "1234".to_string() },
-                    ],
-                    [
-                        CalendarCell { color: GreenBg, text: "    ".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: RedBg, text: "1234".to_string() },
-                    ],
-                    [
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: YellowBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: RedBrightBg, text: "1234".to_string() },
-                    ],
-                    [
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: YellowBg, text: "1234".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                    ],
-                ],
-            },
-            CalendarMonth {
-                title: "May".to_string(),
-                subtitle: "∅ 2375".to_string(),
-                rows: vec![
-                    [
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                        CalendarCell { color: RedBg, text: "1234".to_string() },
-                        CalendarCell { color: YellowBg, text: "1234".to_string() },
-                    ],
-                    [
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: YellowBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: RedBg, text: "1234".to_string() },
-                    ],
-                    [
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: YellowBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: RedBg, text: "1234".to_string() },
-                    ],
-                    [
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBrightBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: GreenBg, text: "1234".to_string() },
-                        CalendarCell { color: White, text: "    ".to_string() },
-                    ],
-                ],
-            },
-        ];
     }
     else if input == 'q' {
         app.should_exit = true;
@@ -272,7 +184,7 @@ fn draw_input(_app: &App) {
 
 struct CalendarMonth {
     title: String,
-    subtitle: String,
+    average: f32,
     rows: Vec<[CalendarCell; 7]>
 }
 
@@ -311,12 +223,19 @@ fn draw_calendar(app: &App) {
     draw_empty();
 
     for month in &app.calendar {
+        let subtitle: String = if app.width > 33 {
+            format!("∅ {:.0}", month.average)
+        } else {
+            format!("∅{:.0}", month.average)
+        };
+
         draw_line_right(
             month.title.to_string(), White,
-            month.subtitle.to_string(), White,
+            subtitle, White,
             app.width, draw_width, 0
         );
-        draw_empty();
+
+        if app.width > 33 { draw_empty(); }
         
         for i in 0..month.rows.len() {
             let row = &month.rows[i];
@@ -346,6 +265,7 @@ fn draw_calendar(app: &App) {
                 draw_empty();
             }
         }
+        draw_empty();
     }
 }
 
@@ -410,7 +330,7 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
 
                     months.push(CalendarMonth {
                         title: month_from_number(current_month).to_string(),
-                        subtitle: format!("∅ {:.0}", average_calories),
+                        average: average_calories,
                         rows: rows
                     });
                     rows = vec![];
@@ -461,7 +381,7 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
         months.push(
             CalendarMonth {
                 title: month_from_number(current_month).to_string(),
-                subtitle: format!("∅ {:.0}", average_calories),
+                average: average_calories,
                 rows: rows
             }
         );
