@@ -1,6 +1,6 @@
 mod parser;
 mod terminal;
-use terminal::{ Color, Color::*, color_start, COLOR_END };
+use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
 
 enum State { List, Input, Calendar }
 
@@ -105,25 +105,25 @@ fn draw(app: &App) {
 
 // SPECIFIC VIEWS
 
-fn process_input_list(app: &mut App, input: char) -> bool {
+fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     let did_process_input: bool;
     did_process_input = true; // this should be inside of blocks to redraw only when needed
                               // but it is leading to slow scrolling through pages
-
-    if input as usize == 68 { // arrow left
+    
+    if input[0] == 27 && input[1] == 91 && input[2] == 68 { // arrow left
         if app.selected_entry_index - 1 > 0 {
             app.selected_entry_index -= 1;
         }
     }
-    else if input as usize == 67 { // arrow right
+    else if input[0] == 27 && input[1] == 91 && input[2] == 67 { // arrow right
         if app.selected_entry_index + 1 < app.entries.len() {
             app.selected_entry_index += 1;
         }
     }
-    else if input == 'i' {
+    else if input[0] == 'i' as u8 {
         app.state = State::Input;
         app.input.state = InputState::Name;
-    } else if input == 's' { 
+    } else if input[0] == 's' as u8 { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
         app.input.completions = [ // cleanup: this is dumb
@@ -134,11 +134,11 @@ fn process_input_list(app: &mut App, input: char) -> bool {
             "Snack 2".to_string()
         ].to_vec();
         refresh_completions(app);
-    } else if input == 'c' {
+    } else if input[0] == 'c' as u8 {
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
     }
-    else if input == 'q' {
+    else if input[0] == 'q' as u8 {
         app.should_exit = true;
     }
     return did_process_input;
@@ -219,14 +219,14 @@ fn refresh_completions(app: &mut App) {
     }
 }
 
-fn process_input_input(app: &mut App, input: char) -> bool {
-    if input == 27 as char { // ESC
+fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
+    if input[0] == 27 && input[1] == 0 { // ESC
         app.state = State::List;
         app.input.query = "".to_string()
-    } else if input as u8 == 127 { // DEL
+    } else if input[0] == 127 { // DEL // todo: not del?
         app.input.query.pop();
-    } else if !(input> 0 as char && input < 32 as char) {
-        app.input.query.push(input);
+    } else if !(input[0] > 0 && input[0] < 32) {
+        app.input.query.push(as_char(input));
     }
 
     refresh_completions(app);
@@ -260,8 +260,8 @@ struct CalendarCell {
     text: String
 }
 
-fn process_input_calendar(app: &mut App, input: char) -> bool {
-    if input == 27 as char {
+fn process_input_calendar(app: &mut App, input: [u8; 4]) -> bool {
+    if input[0] == 27 && input[1] == 0 { // ESC
         app.state = State::List;
     }
     return true;
@@ -451,7 +451,6 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
                 rows: rows
             }
         );
-        rows = vec![];
     }
     
     // std::process::exit(1);

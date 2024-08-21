@@ -19,7 +19,7 @@ pub fn empty_termios() -> libc::termios {
 }
 
 // copied and refactored from: https://docs.rs/console/0.15.0/src/console/unix_term.rs.html#87
-pub fn get_input() -> Option<char> {
+pub fn get_input() -> Option<[u8; 4]> {
     let tty_f;
     let fd = unsafe {
         if libc::isatty(libc::STDIN_FILENO) == 1 {
@@ -46,15 +46,16 @@ pub fn get_input() -> Option<char> {
         } else if buf[0] == b'\x03' {
             None
         } else {
-            Some(String::from_utf8(buf.to_vec()).unwrap().chars().next().unwrap())
+            Some(buf)
+            // Some(String::from_utf8(buf.to_vec()).unwrap().chars().next().unwrap())
         }
     } else {
         None
     }
 }
 
-pub fn convert(data: &[u8; 4]) -> u32 {
-    unsafe { std::mem::transmute(*data) }
+pub fn as_char(bytes: [u8; 4]) -> char {
+    String::from_utf8(bytes.to_vec()).unwrap().chars().next().unwrap()
 }
 
 pub fn clear_window() {
