@@ -30,13 +30,15 @@ pub fn get_input() -> Option<char> {
         }
     };
 
+    // todo: can't get to type umlaut on mac
+
     let mut pollfd = libc::pollfd { fd, events: libc::POLLIN, revents: 0, };
     let ret = unsafe { libc::poll(&mut pollfd as *mut _, 1, 0) };
     if ret < 0 { return None }
 
     if pollfd.revents & libc::POLLIN != 0 {
-        let mut buf: [u8; 1] = [0];
-        let read = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut _, 1) };
+        let mut buf: [u8; 4] = [0, 0, 0, 0];
+        let read = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut _, 4) };
         if read < 0 {
             None
         } else if read == 0 {
@@ -44,14 +46,19 @@ pub fn get_input() -> Option<char> {
         } else if buf[0] == b'\x03' {
             None
         } else {
-            Some(buf[0] as char)
+            Some(String::from_utf8(buf.to_vec()).unwrap().chars().next().unwrap())
         }
     } else {
         None
     }
 }
 
+pub fn convert(data: &[u8; 4]) -> u32 {
+    unsafe { std::mem::transmute(*data) }
+}
+
 pub fn clear_window() {
+    // todo: this does not delete the history on macos
     print!("{esc}c", esc = 27 as char);
 }
 

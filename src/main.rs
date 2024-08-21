@@ -11,7 +11,7 @@ struct App {
     width: usize,
     height: usize,
     selected_entry_index: usize,
-    input_buffer: String,
+    input: Input,
     calendar: Vec<CalendarMonth>,
 }
 
@@ -33,6 +33,15 @@ fn main() {
 
     let entries_count = entries.len() - 1; // todo: will it crash if entires are empty?
 
+    let mut all_items: Vec<*const parser::Item> = vec![];
+    for entry in &entries {
+        for section in &entry.sections {
+            for item in &section.items {
+                all_items.push(item);
+            }
+        }
+    }
+
     let mut app = App {
         should_exit: false,
         state: State::List,
@@ -40,7 +49,13 @@ fn main() {
         width: 0,
         height: 0,
         selected_entry_index: entries_count,
-        input_buffer: "".to_string(),
+        input: Input {
+            state: InputState::Name,
+            query: "".to_string(),
+            completions: vec![],
+            filtered_completions: vec![],
+            all_items: all_items,
+        },
         calendar: vec![],
     };
 
@@ -92,14 +107,10 @@ fn draw(app: &App) {
 
 fn process_input_list(app: &mut App, input: char) -> bool {
     let did_process_input: bool;
-    app.input_buffer.push(input);
     did_process_input = true; // this should be inside of blocks to redraw only when needed
                               // but it is leading to slow scrolling through pages
 
-    if input == '\n' {
-        app.input_buffer = "".to_string();
-    }
-    else if input as usize == 68 { // arrow left
+    if input as usize == 68 { // arrow left
         if app.selected_entry_index - 1 > 0 {
             app.selected_entry_index -= 1;
         }
@@ -109,10 +120,21 @@ fn process_input_list(app: &mut App, input: char) -> bool {
             app.selected_entry_index += 1;
         }
     }
-    else if input == 'n' {
+    else if input == 'i' {
         app.state = State::Input;
-    } 
-    else if input == 'c' {
+        app.input.state = InputState::Name;
+    } else if input == 's' { 
+        app.state = State::Input;
+        app.input.state = InputState::SectionName;
+        app.input.completions = [ // cleanup: this is dumb
+            "Breakfast".to_string(), 
+            "Lunch".to_string(), 
+            "Dinner".to_string(), 
+            "Snack".to_string(), 
+            "Snack 2".to_string()
+        ].to_vec();
+        refresh_completions(app);
+    } else if input == 'c' {
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
     }
@@ -169,15 +191,59 @@ fn draw_list(app: &App) {
     }
 }
 
-fn process_input_input(app: &mut App, input: char) -> bool {
-    if input == 'x' {
-        app.state = State::List;
+// INPUT
+
+struct Input {
+    state: InputState,
+    query: String,
+    completions: Vec<String>,
+    filtered_completions: Vec<String>,
+    all_items: Vec<*const parser::Item>,
+}
+
+enum InputState {
+    SectionName, Name, Quantity, Calories
+}
+
+fn refresh_completions(app: &mut App) {
+    let clean_query = app.input.query.to_lowercase().to_string();
+    if clean_query.len() > 0 {
+        app.input.filtered_completions = vec![];
+        for completion in &app.input.completions {
+            if completion.to_lowercase().contains(&clean_query) {
+                app.input.filtered_completions.push(completion.clone());
+            }
+        }
+    } else {
+        app.input.filtered_completions = app.input.completions.clone();
     }
+}
+
+fn process_input_input(app: &mut App, input: char) -> bool {
+    if input == 27 as char { // ESC
+        app.state = State::List;
+        app.input.query = "".to_string()
+    } else if input as u8 == 127 { // DEL
+        app.input.query.pop();
+    } else if !(input> 0 as char && input < 32 as char) {
+        app.input.query.push(input);
+    }
+
+    refresh_completions(app);
     return true;
 }
 
-fn draw_input(_app: &App) {
-    println!("Inputting shit");
+fn draw_input(app: &App) {
+    const DRAW_WIDTH: usize = 50;
+
+    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 1);
+    for _ in 0..app.height-used_lines { draw_empty(); }
+
+    for completion in &app.input.filtered_completions {
+        draw_line(format!("{}", completion), BlackBg, app.width, DRAW_WIDTH, 0);
+    }
+
+    draw_line(format!("> {}", app.input.query), BlackBg, app.width, DRAW_WIDTH, 0);
 }
 
 // CALENDAR
@@ -195,7 +261,7 @@ struct CalendarCell {
 }
 
 fn process_input_calendar(app: &mut App, input: char) -> bool {
-    if input == 'x' {
+    if input == 27 as char {
         app.state = State::List;
     }
     return true;
@@ -444,6 +510,20 @@ fn color_for_calories(calories: f32) -> Color {
 
 fn draw_empty() {
     println!("");
+}
+
+fn draw_line(
+    string: String,
+    color: Color,
+    window_width: usize,
+    max_draw_width: usize,
+    left_limit: usize
+) {
+
+    draw_line_right(
+        string, color, "".to_string(), White,
+        window_width, max_draw_width, left_limit
+    );
 }
 
 fn draw_line_right(
