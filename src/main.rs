@@ -227,12 +227,15 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             app.input.completion_index -= 1;
         }
     } else if input[0] == 27 && input[1] == 91 && input[2] == 65 { // arrow down
-        if app.input.completion_index < 10 {
-            app.input.completion_index += 1;
+        if app.input.filtered_completions.len() > 0 {
+            if app.input.completion_index < app.input.filtered_completions.len() - 1 {
+                app.input.completion_index += 1;
+            }
         }
     }
 
     refresh_completions(app);
+
     return true;
 }
 
@@ -251,7 +254,11 @@ fn draw_input(app: &App) {
     }
 
     draw_empty();
-    draw_line(format!("> {}", app.input.query), BlackBg, app.width, DRAW_WIDTH, 0);
+    draw_line_right(
+        format!("> {}", app.input.query), BlackBg, 
+        state_name(&app.input.state), BlackBrightBg,
+        app.width, DRAW_WIDTH, 0
+    );
 }
 
 fn refresh_completions(app: &mut App) {
@@ -268,8 +275,21 @@ fn refresh_completions(app: &mut App) {
             }
         }
     } else {
-        app.input.filtered_completions = app.input.completions.clone()[0..=10].to_vec();
+        app.input.filtered_completions = app.input.completions.clone();
+
+        if app.input.filtered_completions.len() > 10 {
+            app.input.filtered_completions = app.input.completions[0..=10].to_vec();
+        }
     }
+}
+
+fn state_name(state: &InputState) -> String {
+    match &state {
+        InputState::Name => "Item name",
+        InputState::SectionName => "Meal name",
+        InputState::Quantity => "Quantity",
+        InputState::Calories => "Calories",
+    }.to_string()
 }
 
 fn make_completions_for_item_name(all_items: &Vec<parser::Item>) -> Vec<String> {
