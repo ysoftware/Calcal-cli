@@ -2,6 +2,9 @@ mod parser;
 mod terminal;
 use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
 
+#[allow(unused_imports)]
+use std::process::exit;
+
 enum State { List, Input, Calendar }
 
 struct App {
@@ -10,7 +13,7 @@ struct App {
     entries: Vec<parser::EntryEntity>,
     width: usize,
     height: usize,
-    selected_entry_index: usize,
+    list: List,
     input: Input,
     calendar: Vec<CalendarMonth>,
 }
@@ -31,9 +34,8 @@ fn main() {
         std::process::exit(1);
     });
 
-    let entries_count = entries.len() - 1; // todo: will it crash if entires are empty?
-
     let input = initial_input_value(&entries);
+    let list = initial_list_value(&entries);
 
     let mut app = App {
         should_exit: false,
@@ -41,7 +43,7 @@ fn main() {
         entries: entries,
         width: 0,
         height: 0,
-        selected_entry_index: entries_count,
+        list: list,
         input: input,
         calendar: vec![],
     };
@@ -92,36 +94,61 @@ fn draw(app: &App) {
 
 // LIST VIEW
 
+struct List {
+    selected_entry_index: usize,
+}
+
+fn initial_list_value(entries: &Vec<parser::EntryEntity>) -> List {
+    // todo: will it crash if entires are empty?
+    List {
+        selected_entry_index: entries.len() - 1
+    }
+}
+
 fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     let did_process_input: bool;
     did_process_input = true; // this should be inside of blocks to redraw only when needed
                               // but it is leading to slow scrolling through pages
     
-    if input[0] == 27 && input[1] == 91 && input[2] == 68 { // arrow left
-        if app.selected_entry_index - 1 > 0 {
-            app.selected_entry_index -= 1;
+    let char_input = as_char(input);
+
+    if input[0] == 27 && input[1] == 91 {
+        if input[2] == 68 { // arrow left
+            if app.list.selected_entry_index > 0 {
+                app.list.selected_entry_index -= 1;
+            }
+        } else if input[2] == 67 { // arrow right
+            if app.list.selected_entry_index + 1 < app.entries.len() {
+                app.list.selected_entry_index += 1;
+            }
+        } else if input[2] == 65 { // arrow up
+            if app.list.selected_entry_index < app.entries.len() - 10 {
+                app.list.selected_entry_index = std::cmp::min(app.entries.len() - 1, app.list.selected_entry_index + 10);
+            } else {
+                app.list.selected_entry_index = app.entries.len() - 1;
+            }
+        } else if input[2] == 66 { // arrow down
+            if app.list.selected_entry_index >= 10 {
+                app.list.selected_entry_index = std::cmp::max(0, app.list.selected_entry_index - 10);
+            } else {
+                app.list.selected_entry_index = 0;
+            }
         }
-    }
-    else if input[0] == 27 && input[1] == 91 && input[2] == 67 { // arrow right
-        if app.selected_entry_index + 1 < app.entries.len() {
-            app.selected_entry_index += 1;
-        }
-    }
-    else if input[0] == 'i' as u8 {
+    } else if char_input == 'i' || char_input == 'ш' {
         app.state = State::Input;
         app.input.state = InputState::Name;
         app.input.completions = make_completions_for_item_name(&app.input.all_items);
         refresh_completions(app);
-    } else if input[0] == 's' as u8 { 
+    } else if char_input == 's' || char_input == 'ы' { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
         app.input.completions = make_completions_for_section_name();
         refresh_completions(app);
-    } else if input[0] == 'c' as u8 {
+    } else if char_input == 'c' || char_input == 'с' { // c cyrillic
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
     }
-    else if input[0] == 'q' as u8 {
+    else if char_input == 'q' || char_input == 'й' {
         app.should_exit = true;
     }
     return did_process_input;
@@ -131,7 +158,7 @@ fn draw_list(app: &App) {
     const DRAW_WIDTH: usize = 52;
     if app.height > 40 && app.width > 50 { draw_empty(); }
 
-    let selected_entry = &app.entries[app.selected_entry_index];
+    let selected_entry = &app.entries[app.list.selected_entry_index];
     let mut entry_calories = 0.0;
 
     for section in &selected_entry.sections {
@@ -176,6 +203,7 @@ fn draw_list(app: &App) {
 
 // INPUT VIEW
 
+#[allow(dead_code)]
 enum InputState {
     SectionName, Name, Quantity, Calories
 }
