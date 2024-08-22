@@ -186,6 +186,7 @@ struct Input {
     completions: Vec<String>,
     filtered_completions: Vec<String>,
     all_items: Vec<parser::Item>,
+    completion_index: usize,
 }
 
 fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
@@ -204,17 +205,29 @@ fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
         completions: vec![],
         filtered_completions: vec![],
         all_items: all_items,
+        completion_index: 0,
     };
 }
 
 fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
     if input[0] == 27 && input[1] == 0 { // ESC
         app.state = State::List;
-        app.input.query = "".to_string()
+        app.input.query = "".to_string();
+        app.input.completion_index = 0;
     } else if input[0] == 127 { // DEL // todo: not del?
         app.input.query.pop();
+        app.input.completion_index = 0;
     } else if !(input[0] > 0 && input[0] < 32) {
         app.input.query.push(as_char(input));
+        app.input.completion_index = 0;
+    } else if input[0] == 27 && input[1] == 91 && input[2] == 66 { // arrow down
+        if app.input.completion_index > 0 {
+            app.input.completion_index -= 1;
+        }
+    } else if input[0] == 27 && input[1] == 91 && input[2] == 65 { // arrow down
+        if app.input.completion_index < 10 {
+            app.input.completion_index += 1;
+        }
     }
 
     refresh_completions(app);
@@ -224,13 +237,18 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
 fn draw_input(app: &App) {
     const DRAW_WIDTH: usize = 50;
 
-    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 1);
+    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 2);
     for _ in 0..app.height-used_lines { draw_empty(); }
 
-    for completion in &app.input.filtered_completions {
-        draw_line(format!("{}", completion), BlackBg, app.width, DRAW_WIDTH, 0);
+    let completions_count = app.input.filtered_completions.len();
+    for i in 0..completions_count {
+        let reversed_index = completions_count-1-i;
+        let completion = &app.input.filtered_completions[reversed_index];
+        let color = if reversed_index == app.input.completion_index { BlueBg } else { White };
+        draw_line(format!("{}", completion), color, app.width, DRAW_WIDTH, 0);
     }
 
+    draw_empty();
     draw_line(format!("> {}", app.input.query), BlackBg, app.width, DRAW_WIDTH, 0);
 }
 
