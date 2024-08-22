@@ -33,14 +33,7 @@ fn main() {
 
     let entries_count = entries.len() - 1; // todo: will it crash if entires are empty?
 
-    let mut all_items: Vec<*const parser::Item> = vec![];
-    for entry in &entries {
-        for section in &entry.sections {
-            for item in &section.items {
-                all_items.push(item);
-            }
-        }
-    }
+    let input = initial_input_value(&entries);
 
     let mut app = App {
         should_exit: false,
@@ -49,13 +42,7 @@ fn main() {
         width: 0,
         height: 0,
         selected_entry_index: entries_count,
-        input: Input {
-            state: InputState::Name,
-            query: "".to_string(),
-            completions: vec![],
-            filtered_completions: vec![],
-            all_items: all_items,
-        },
+        input: input,
         calendar: vec![],
     };
 
@@ -103,7 +90,7 @@ fn draw(app: &App) {
     }
 }
 
-// SPECIFIC VIEWS
+// LIST VIEW
 
 fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     let did_process_input: bool;
@@ -123,6 +110,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     else if input[0] == 'i' as u8 {
         app.state = State::Input;
         app.input.state = InputState::Name;
+        app.input.completions = vec![];
     } else if input[0] == 's' as u8 { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
@@ -191,7 +179,7 @@ fn draw_list(app: &App) {
     }
 }
 
-// INPUT
+// INPUT VIEW
 
 struct Input {
     state: InputState,
@@ -205,18 +193,23 @@ enum InputState {
     SectionName, Name, Quantity, Calories
 }
 
-fn refresh_completions(app: &mut App) {
-    let clean_query = app.input.query.to_lowercase().to_string();
-    if clean_query.len() > 0 {
-        app.input.filtered_completions = vec![];
-        for completion in &app.input.completions {
-            if completion.to_lowercase().contains(&clean_query) {
-                app.input.filtered_completions.push(completion.clone());
+fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
+    let mut all_items: Vec<*const parser::Item> = vec![];
+    for entry in entries {
+        for section in &entry.sections {
+            for item in &section.items {
+                all_items.push(item);
             }
         }
-    } else {
-        app.input.filtered_completions = app.input.completions.clone();
     }
+
+    return Input {
+        state: InputState::Name,
+        query: "".to_string(),
+        completions: vec![],
+        filtered_completions: vec![],
+        all_items: all_items,
+    };
 }
 
 fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
@@ -246,7 +239,21 @@ fn draw_input(app: &App) {
     draw_line(format!("> {}", app.input.query), BlackBg, app.width, DRAW_WIDTH, 0);
 }
 
-// CALENDAR
+fn refresh_completions(app: &mut App) {
+    let clean_query = app.input.query.to_lowercase().to_string();
+    if clean_query.len() > 0 {
+        app.input.filtered_completions = vec![];
+        for completion in &app.input.completions {
+            if completion.to_lowercase().contains(&clean_query) {
+                app.input.filtered_completions.push(completion.clone());
+            }
+        }
+    } else {
+        app.input.filtered_completions = app.input.completions.clone();
+    }
+}
+
+// CALENDAR VIEW
 
 struct CalendarMonth {
     title: String,
