@@ -215,8 +215,10 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
         app.input.query = "".to_string();
         app.input.completion_index = 0;
     } else if input[0] == 127 { // DEL // todo: not del?
-        app.input.query.pop();
-        app.input.completion_index = 0;
+        if app.input.query.len() > 0 {
+            app.input.query.pop();
+            app.input.completion_index = 0;
+        }
     } else if !(input[0] > 0 && input[0] < 32) {
         app.input.query.push(as_char(input));
         app.input.completion_index = 0;
