@@ -110,17 +110,12 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     else if input[0] == 'i' as u8 {
         app.state = State::Input;
         app.input.state = InputState::Name;
-        app.input.completions = vec![];
+        app.input.completions = make_completions_for_item_name(&app.input.all_items);
+        refresh_completions(app);
     } else if input[0] == 's' as u8 { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
-        app.input.completions = [ // cleanup: this is dumb
-            "Breakfast".to_string(), 
-            "Lunch".to_string(), 
-            "Dinner".to_string(), 
-            "Snack".to_string(), 
-            "Snack 2".to_string()
-        ].to_vec();
+        app.input.completions = make_completions_for_section_name();
         refresh_completions(app);
     } else if input[0] == 'c' as u8 {
         app.state = State::Calendar;
@@ -181,24 +176,24 @@ fn draw_list(app: &App) {
 
 // INPUT VIEW
 
+enum InputState {
+    SectionName, Name, Quantity, Calories
+}
+
 struct Input {
     state: InputState,
     query: String,
     completions: Vec<String>,
     filtered_completions: Vec<String>,
-    all_items: Vec<*const parser::Item>,
-}
-
-enum InputState {
-    SectionName, Name, Quantity, Calories
+    all_items: Vec<parser::Item>,
 }
 
 fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
-    let mut all_items: Vec<*const parser::Item> = vec![];
+    let mut all_items: Vec<parser::Item> = vec![];
     for entry in entries {
         for section in &entry.sections {
             for item in &section.items {
-                all_items.push(item);
+                all_items.push(item.clone());
             }
         }
     }
@@ -247,10 +242,40 @@ fn refresh_completions(app: &mut App) {
             if completion.to_lowercase().contains(&clean_query) {
                 app.input.filtered_completions.push(completion.clone());
             }
+
+            if app.input.filtered_completions.len() == 10 {
+                break;
+            }
         }
     } else {
-        app.input.filtered_completions = app.input.completions.clone();
+        app.input.filtered_completions = app.input.completions.clone()[0..=10].to_vec();
     }
+}
+
+fn make_completions_for_item_name(all_items: &Vec<parser::Item>) -> Vec<String> {
+    let mut result: Vec<String> = vec![];
+
+    let mut seen = std::collections::HashSet::new();
+    let mut unique_items = all_items.clone();
+    unique_items.retain(|item| 
+        seen.insert(format!("{} {}", item.title, item.measurement))
+    );
+
+    for item in unique_items { 
+        result.push(format!("{} (in {})", item.title, item.measurement));
+    }
+
+    return result;
+}
+
+fn make_completions_for_section_name() -> Vec<String> {
+    [ // cleanup: this is dumb how we have to to_string() everything here
+        "Breakfast".to_string(), 
+        "Lunch".to_string(), 
+        "Dinner".to_string(), 
+        "Snack".to_string(), 
+        "Snack 2".to_string()
+    ].to_vec()
 }
 
 // CALENDAR VIEW
