@@ -219,17 +219,34 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             app.input.query.pop();
             app.input.completion_index = 0;
         }
-    } else if !(input[0] > 0 && input[0] < 32) {
+    } else if !(input[0] > 0 && input[0] < 32) { // typing text
         app.input.query.push(as_char(input));
         app.input.completion_index = 0;
-    } else if input[0] == 27 && input[1] == 91 && input[2] == 66 { // arrow down
-        if app.input.completion_index > 0 {
-            app.input.completion_index -= 1;
-        }
-    } else if input[0] == 27 && input[1] == 91 && input[2] == 65 { // arrow down
-        if app.input.filtered_completions.len() > 0 {
-            if app.input.completion_index < app.input.filtered_completions.len() - 1 {
-                app.input.completion_index += 1;
+    } else if input[0] == 27 { // special characters
+        if input[1] == 115 {
+            app.input.query.push('ß');
+            app.input.completion_index = 0;
+        } else if input[1] == 101 {
+            app.input.query.push('é');
+            app.input.completion_index = 0;
+        } else if input[1] == 117 {
+            app.input.query.push('ü');
+            app.input.completion_index = 0;
+        } else if input[1] == 111 {
+            app.input.query.push('ö');
+            app.input.completion_index = 0;
+        } else if input[1] == 97 {
+            app.input.query.push('ä');
+            app.input.completion_index = 0;
+        } else if input[1] == 91 && input[2] == 66 { // arrow down
+            if app.input.completion_index > 0 {
+                app.input.completion_index -= 1;
+            }
+        } else if input[0] == 27 && input[1] == 91 && input[2] == 65 { // arrow down
+            if app.input.filtered_completions.len() > 0 {
+                if app.input.completion_index < app.input.filtered_completions.len() - 1 {
+                    app.input.completion_index += 1;
+                }
             }
         }
     }
