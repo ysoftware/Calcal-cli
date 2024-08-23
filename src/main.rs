@@ -121,10 +121,12 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         if input[2] == 68 { // arrow left
             if app.list.selected_entry_index > 0 {
                 app.list.selected_entry_index -= 1;
+                app.list.item_deletion_index = -1;
             }
         } else if input[2] == 67 { // arrow right
             if app.list.selected_entry_index + 1 < app.entries.len() {
                 app.list.selected_entry_index += 1;
+                app.list.item_deletion_index = -1;
             }
         } else if input[1] == 91 && input[2] == 66 { // arrow down
             if app.list.item_deletion_index > -1 {
@@ -163,14 +165,17 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.input.state = InputState::Name;
         app.input.completions = make_completions_for_item_name(&app.input.all_items);
         refresh_completions(app);
+        app.list.item_deletion_index = -1;
     } else if char_input == 's' || char_input == 'ы' { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
         app.input.completions = make_completions_for_section_name();
         refresh_completions(app);
+        app.list.item_deletion_index = -1;
     } else if char_input == 'c' || char_input == 'с' { // latin and cyrillic c are different
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
+        app.list.item_deletion_index = -1;
     }
     else if char_input == 'q' || char_input == 'й' {
         app.should_exit = true;
