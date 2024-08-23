@@ -98,7 +98,6 @@ fn draw(app: &App) {
 
 struct List {
     selected_entry_index: usize,
-    selected_entry_items_count: usize,
     item_deletion_index: i32,
     is_showing_deletion_alert: bool,
 }
@@ -107,7 +106,6 @@ fn initial_list_value(entries: &Vec<parser::EntryEntity>) -> List {
     // todo: will it crash if entires are empty?
     List {
         selected_entry_index: entries.len() - 1,
-        selected_entry_items_count: count_entry_items(&entries[0]),
         item_deletion_index: -1,
         is_showing_deletion_alert: false
     }
@@ -274,7 +272,7 @@ fn draw_list(app: &App) {
 fn count_entry_items(entry: &parser::EntryEntity) -> usize {
     let mut count = 0;
     for section in &entry.sections {
-        for item in &section.items {
+        for _ in &section.items {
             count += 1;
         }
     }
@@ -791,5 +789,3 @@ fn make_http_request() -> Result<String, parser::Error> {
         .map_err(|_e| { parser::Error::ExpectedEOF })?
         .to_owned())
 }
-
-// todo: first entry is missing
