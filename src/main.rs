@@ -5,6 +5,8 @@ use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
 #[allow(unused_imports)]
 use std::process::exit;
 
+const DRAW_WIDTH: usize = 52;
+
 enum State { List, Input, Calendar }
 
 struct App {
@@ -70,7 +72,7 @@ fn process_window_resize(app: &mut App) -> bool {
 fn process_input(app: &mut App) -> bool {
     let did_resize_window = process_window_resize(app);
 
-    if let Some(input) = terminal::get_input() { // todo: unicode
+    if let Some(input) = terminal::get_input() {
         let did_process_input: bool = match app.state {
             State::List => { process_input_list(app, input) },
             State::Input => { process_input_input(app, input) },
@@ -159,34 +161,20 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
                 }
             }
         }
-
-        // todo: repurpose this code for shift+arrow left/right
-        // } else if input[2] == 65 { // arrow up
-        //     if app.list.selected_entry_index < app.entries.len() - 10 {
-        //         app.list.selected_entry_index = std::cmp::min(app.entries.len() - 1, app.list.selected_entry_index + 10);
-        //     } else {
-        //         app.list.selected_entry_index = app.entries.len() - 1;
-        //     }
-        // } else if input[2] == 66 { // arrow down
-        //     if app.list.selected_entry_index >= 10 {
-        //         app.list.selected_entry_index = std::cmp::max(0, app.list.selected_entry_index - 10);
-        //     } else {
-        //         app.list.selected_entry_index = 0;
-        //     }
-        // }
-        
     } else if char_input == 'i' || char_input == 'ш' {
         app.state = State::Input;
         app.input.state = InputState::Name;
         app.input.completions = make_completions_for_item_name(&app.input.all_items);
         refresh_completions(app);
         app.list.item_deletion_index = -1;
+        app.input.completion_index = 0;
     } else if char_input == 's' || char_input == 'ы' { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
         app.input.completions = make_completions_for_section_name();
         refresh_completions(app);
         app.list.item_deletion_index = -1;
+        app.input.completion_index = 0;
     } else if char_input == 'c' || char_input == 'с' { // latin and cyrillic c are different
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
@@ -199,8 +187,12 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
 }
 
 fn draw_list(app: &App) {
-    const DRAW_WIDTH: usize = 52;
-    if app.height > 40 && app.width > 50 { draw_empty(); }
+    let mut drawn_lines = 0;
+
+    if app.height > 30 && app.width > 50 { 
+        drawn_lines += 1;
+        draw_empty(); 
+    }
 
     let selected_entry = &app.entries[app.list.selected_entry_index];
     let mut item_index = (count_entry_items(&selected_entry) as i32) - 1;
@@ -212,6 +204,7 @@ fn draw_list(app: &App) {
         }
     }
 
+    drawn_lines += 1;
     draw_line_right(
         format!("{}", selected_entry.date), BlackBg,
         format!("{} kcal", entry_calories), BlueBrightBg,
@@ -231,6 +224,7 @@ fn draw_list(app: &App) {
             app.width, DRAW_WIDTH,
             20 // align right text in the middle of the line
         );
+        drawn_lines += 2;
 
         for i in 0..section.items.len() {
             let item = &section.items[i];
@@ -238,12 +232,14 @@ fn draw_list(app: &App) {
 
             if app.list.item_deletion_index == item_index as i32 {
                 if app.list.is_showing_deletion_alert {
+                    drawn_lines += 1;
                     draw_line_right(
                         format!("Delete {}?", item.title), RedBrightBg,
                         "[confirm: y]".to_string(), RedBrightBg,
                         app.width, DRAW_WIDTH, 0
                     );
                 } else {
+                    drawn_lines += 1;
                     draw_line_right(
                         format!("x {}, {} {}", item.title, item.quantity, item.measurement), left_color,
                         "[delete]".to_string(), RedBrightBg,
@@ -252,6 +248,7 @@ fn draw_list(app: &App) {
                 }
             } else {
                 let right_color = if i % 2 == 1 { White } else { BlackBg };
+                drawn_lines += 1;
                 draw_line_right(
                     format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
                     format!("{} kcal", item.calories), right_color,
@@ -261,6 +258,17 @@ fn draw_list(app: &App) {
             item_index -= 1;
         }
     }
+
+    // todo: introduce vertical scrolling
+    let used_lines = std::cmp::min(app.height, drawn_lines + 3); // cleanup: explain this magic number
+    for _ in 0..app.height-used_lines { draw_empty(); }
+
+    draw_empty();
+    draw_line_right(
+        "".to_string(), BlackBg, 
+        format!("[{}/{}]", app.list.selected_entry_index + 1, app.entries.len()), BlackBrightBg,
+        app.width, DRAW_WIDTH, 0
+    );
 }
 
 fn count_entry_items(entry: &parser::EntryEntity) -> usize {
@@ -362,9 +370,8 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
 }
 
 fn draw_input(app: &App) {
-    const DRAW_WIDTH: usize = 50;
-
-    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 2);
+    // todo: introduce vertical scrolling
+    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 3); // cleanup: explain this magic number
     for _ in 0..app.height-used_lines { draw_empty(); }
 
     let completions_count = app.input.filtered_completions.len();
@@ -378,7 +385,7 @@ fn draw_input(app: &App) {
     draw_empty();
     draw_line_right(
         format!("> {}", app.input.query), BlackBg, 
-        state_name(&app.input.state), BlackBrightBg,
+        format!("[{}]", state_name(&app.input.state)), BlackBrightBg,
         app.width, DRAW_WIDTH, 0
     );
 }
