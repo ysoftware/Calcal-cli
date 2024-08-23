@@ -96,16 +96,18 @@ fn draw(app: &App) {
 
 struct List {
     selected_entry_index: usize,
-    item_deletion_index: i32,
     selected_entry_items_count: usize,
+    item_deletion_index: i32,
+    is_showing_deletion_alert: bool,
 }
 
 fn initial_list_value(entries: &Vec<parser::EntryEntity>) -> List {
     // todo: will it crash if entires are empty?
     List {
         selected_entry_index: entries.len() - 1,
-        item_deletion_index: -1,
         selected_entry_items_count: count_entry_items(&entries[0]),
+        item_deletion_index: -1,
+        is_showing_deletion_alert: false
     }
 }
 
@@ -117,7 +119,20 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     let char_input = as_char(input);
     let selected_entry_items_count = count_entry_items(&app.entries[app.list.selected_entry_index]);
 
-    if input[0] == 27 && input[1] == 91 {
+    if app.list.is_showing_deletion_alert {
+        if char_input == 'y' {
+            // delete the item
+        }
+        app.list.is_showing_deletion_alert = false;
+        app.list.item_deletion_index = -1;
+        return true;
+    }
+
+    if input[0] == 10 { // Enter
+        if app.list.item_deletion_index >= 0 {
+            app.list.is_showing_deletion_alert = true;
+        }
+    } else if input[0] == 27 && input[1] == 91 {
         if input[2] == 68 { // arrow left
             if app.list.selected_entry_index > 0 {
                 app.list.selected_entry_index -= 1;
@@ -222,11 +237,19 @@ fn draw_list(app: &App) {
             let left_color = if i % 2 == 1 { White } else { BlackBg };
 
             if app.list.item_deletion_index == item_index as i32 {
-                draw_line_right(
-                    format!("x {}, {} {}", item.title, item.quantity, item.measurement), left_color,
-                    "[delete]".to_string(), RedBrightBg,
-                    app.width, DRAW_WIDTH, 0
-                );
+                if app.list.is_showing_deletion_alert {
+                    draw_line_right(
+                        format!("Delete {}?", item.title), RedBrightBg,
+                        "[confirm: y]".to_string(), RedBrightBg,
+                        app.width, DRAW_WIDTH, 0
+                    );
+                } else {
+                    draw_line_right(
+                        format!("x {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                        "[delete]".to_string(), RedBrightBg,
+                        app.width, DRAW_WIDTH, 0
+                    );
+                }
             } else {
                 let right_color = if i % 2 == 1 { White } else { BlackBg };
                 draw_line_right(
