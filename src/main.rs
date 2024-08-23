@@ -96,12 +96,16 @@ fn draw(app: &App) {
 
 struct List {
     selected_entry_index: usize,
+    item_deletion_index: i32,
+    selected_entry_items_count: usize,
 }
 
 fn initial_list_value(entries: &Vec<parser::EntryEntity>) -> List {
     // todo: will it crash if entires are empty?
     List {
-        selected_entry_index: entries.len() - 1
+        selected_entry_index: entries.len() - 1,
+        item_deletion_index: -1,
+        selected_entry_items_count: count_entry_items(&entries[0]),
     }
 }
 
@@ -111,6 +115,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
                               // but it is leading to slow scrolling through pages
     
     let char_input = as_char(input);
+    let selected_entry_items_count = count_entry_items(&app.entries[app.list.selected_entry_index]);
 
     if input[0] == 27 && input[1] == 91 {
         if input[2] == 68 { // arrow left
@@ -121,19 +126,38 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
             if app.list.selected_entry_index + 1 < app.entries.len() {
                 app.list.selected_entry_index += 1;
             }
-        } else if input[2] == 65 { // arrow up
-            if app.list.selected_entry_index < app.entries.len() - 10 {
-                app.list.selected_entry_index = std::cmp::min(app.entries.len() - 1, app.list.selected_entry_index + 10);
-            } else {
-                app.list.selected_entry_index = app.entries.len() - 1;
+        } else if input[1] == 91 && input[2] == 66 { // arrow down
+            if app.list.item_deletion_index > -1 {
+                app.list.item_deletion_index -= 1;
+            } else if selected_entry_items_count > 0 {
+                app.list.item_deletion_index = (selected_entry_items_count - 1) as i32;
             }
-        } else if input[2] == 66 { // arrow down
-            if app.list.selected_entry_index >= 10 {
-                app.list.selected_entry_index = std::cmp::max(0, app.list.selected_entry_index - 10);
-            } else {
-                app.list.selected_entry_index = 0;
+        } else if input[1] == 91 && input[2] == 65 { // arrow up
+            if selected_entry_items_count > 0 {
+                if (app.list.item_deletion_index as usize) < selected_entry_items_count - 1 
+                    || app.list.item_deletion_index == -1 {
+                        app.list.item_deletion_index += 1;
+                    } else {
+                        app.list.item_deletion_index = -1;
+                }
             }
         }
+
+        // todo: repurpose this code for shift+arrow left/right
+        // } else if input[2] == 65 { // arrow up
+        //     if app.list.selected_entry_index < app.entries.len() - 10 {
+        //         app.list.selected_entry_index = std::cmp::min(app.entries.len() - 1, app.list.selected_entry_index + 10);
+        //     } else {
+        //         app.list.selected_entry_index = app.entries.len() - 1;
+        //     }
+        // } else if input[2] == 66 { // arrow down
+        //     if app.list.selected_entry_index >= 10 {
+        //         app.list.selected_entry_index = std::cmp::max(0, app.list.selected_entry_index - 10);
+        //     } else {
+        //         app.list.selected_entry_index = 0;
+        //     }
+        // }
+        
     } else if char_input == 'i' || char_input == 'ш' {
         app.state = State::Input;
         app.input.state = InputState::Name;
@@ -144,7 +168,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.input.state = InputState::SectionName;
         app.input.completions = make_completions_for_section_name();
         refresh_completions(app);
-    } else if char_input == 'c' || char_input == 'с' { // c cyrillic
+    } else if char_input == 'c' || char_input == 'с' { // latin and cyrillic c are different
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
     }
@@ -159,6 +183,7 @@ fn draw_list(app: &App) {
     if app.height > 40 && app.width > 50 { draw_empty(); }
 
     let selected_entry = &app.entries[app.list.selected_entry_index];
+    let mut item_index = (count_entry_items(&selected_entry) as i32) - 1;
     let mut entry_calories = 0.0;
 
     for section in &selected_entry.sections {
@@ -190,15 +215,34 @@ fn draw_list(app: &App) {
         for i in 0..section.items.len() {
             let item = &section.items[i];
             let left_color = if i % 2 == 1 { White } else { BlackBg };
-            let right_color = if i % 2 == 1 { White } else { BlackBg };
 
-            draw_line_right(
-                format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
-                format!("{} kcal", item.calories), right_color,
-                app.width, DRAW_WIDTH, 0
-            );
+            if app.list.item_deletion_index == item_index as i32 {
+                draw_line_right(
+                    format!("x {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                    "[delete]".to_string(), RedBrightBg,
+                    app.width, DRAW_WIDTH, 0
+                );
+            } else {
+                let right_color = if i % 2 == 1 { White } else { BlackBg };
+                draw_line_right(
+                    format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                    format!("{} kcal", item.calories), right_color,
+                    app.width, DRAW_WIDTH, 0
+                );
+            }
+            item_index -= 1;
         }
     }
+}
+
+fn count_entry_items(entry: &parser::EntryEntity) -> usize {
+    let mut count = 0;
+    for section in &entry.sections {
+        for item in &section.items {
+            count += 1;
+        }
+    }
+    return count;
 }
 
 // INPUT VIEW
@@ -214,7 +258,7 @@ struct Input {
     completions: Vec<String>,
     filtered_completions: Vec<String>,
     all_items: Vec<parser::Item>,
-    completion_index: usize,
+    completion_index: i32,
 }
 
 fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
@@ -233,7 +277,7 @@ fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
         completions: vec![],
         filtered_completions: vec![],
         all_items: all_items,
-        completion_index: 0,
+        completion_index: -1,
     };
 }
 
@@ -241,42 +285,47 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
     if input[0] == 27 && input[1] == 0 { // ESC
         app.state = State::List;
         app.input.query = "".to_string();
-        app.input.completion_index = 0;
+        app.input.completion_index = -1;
     } else if input[0] == 127 { // DEL // todo: not del?
         if app.input.query.len() > 0 {
             app.input.query.pop();
-            app.input.completion_index = 0;
+            app.input.completion_index = -1;
         }
     } else if !(input[0] > 0 && input[0] < 32) { // typing text
         app.input.query.push(as_char(input));
-        app.input.completion_index = 0;
+        app.input.completion_index = -1;
     } else if input[0] == 27 { // special characters
         if input[1] == 115 {
             app.input.query.push('ß');
-            app.input.completion_index = 0;
+            app.input.completion_index = -1;
         } else if input[1] == 101 {
             app.input.query.push('é');
-            app.input.completion_index = 0;
+            app.input.completion_index = -1;
         } else if input[1] == 117 {
             app.input.query.push('ü');
-            app.input.completion_index = 0;
+            app.input.completion_index = -1;
         } else if input[1] == 111 {
-            app.input.query.push('ö');
-            app.input.completion_index = 0;
+            app.input.query.push('ö'); // todo: type ó for Jamón
+            app.input.completion_index = -1;
         } else if input[1] == 97 {
             app.input.query.push('ä');
-            app.input.completion_index = 0;
+            app.input.completion_index = -1;
         } else if input[1] == 91 && input[2] == 66 { // arrow down
-            if app.input.completion_index > 0 {
+            if app.input.completion_index > -1 {
                 app.input.completion_index -= 1;
+            } else if app.input.filtered_completions.len() > 0 {
+                app.input.completion_index = (app.input.filtered_completions.len() - 1) as i32;
             }
-        } else if input[0] == 27 && input[1] == 91 && input[2] == 65 { // arrow down
+        } else if input[1] == 91 && input[2] == 65 { // arrow up
             if app.input.filtered_completions.len() > 0 {
-                if app.input.completion_index < app.input.filtered_completions.len() - 1 {
+                if (app.input.completion_index as usize) < app.input.filtered_completions.len() - 1 
+                 || app.input.completion_index == -1 {
                     app.input.completion_index += 1;
+                } else {
+                    app.input.completion_index = -1;
                 }
             }
-        }
+        } // todo: holding arrow up/down starts printing [[[[
     }
 
     refresh_completions(app);
@@ -294,7 +343,7 @@ fn draw_input(app: &App) {
     for i in 0..completions_count {
         let reversed_index = completions_count-1-i;
         let completion = &app.input.filtered_completions[reversed_index];
-        let color = if reversed_index == app.input.completion_index { BlueBg } else { White };
+        let color = if (reversed_index as i32) == app.input.completion_index { BlueBg } else { White };
         draw_line(format!("{}", completion), color, app.width, DRAW_WIDTH, 0);
     }
 
