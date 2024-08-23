@@ -166,6 +166,9 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         refresh_completions(app);
         app.list.item_deletion_index = -1;
         app.input.completion_index = 0;
+
+        // todo: get last section id
+        app.input.section_name = "Fake meal".to_string();
     } else if char_input == 's' || char_input == 'ы' { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
@@ -173,6 +176,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         refresh_completions(app);
         app.list.item_deletion_index = -1;
         app.input.completion_index = 0;
+        app.input.section_name = "".to_string();
     } else if char_input == 'c' || char_input == 'с' { // latin and cyrillic c are different
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
@@ -293,6 +297,7 @@ struct Input {
     filtered_completions: Vec<String>,
     all_items: Vec<parser::Item>,
     completion_index: i32,
+    section_name: String,
 }
 
 fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
@@ -312,14 +317,18 @@ fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
         filtered_completions: vec![],
         all_items: all_items,
         completion_index: -1,
+        section_name: "".to_string(),
     };
 }
 
 fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
-    if input[0] == 27 && input[1] == 0 { // ESC
-        app.state = State::List;
-        app.input.query = "".to_string();
-        app.input.completion_index = -1;
+    if input[0] == 10 { // Enter
+        if app.input.completion_index > 0 {
+            app.input.section_name = app.input.filtered_completions[app.input.completion_index as usize].clone();
+            app.input.state = InputState::Name;
+        } else {
+            // save inputted value
+        }
     } else if input[0] == 127 { // DEL // todo: not del?
         if app.input.query.len() > 0 {
             app.input.query.pop();
@@ -329,7 +338,11 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
         app.input.query.push(as_char(input));
         app.input.completion_index = -1;
     } else if input[0] == 27 { // special characters
-        if input[1] == 115 {
+        if input[1] == 0 { // Esc
+            app.state = State::List;
+            app.input.query = "".to_string();
+            app.input.completion_index = -1;
+        } else if input[1] == 115 {
             app.input.query.push('ß');
             app.input.completion_index = -1;
         } else if input[1] == 101 {
@@ -369,7 +382,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
 
 fn draw_input(app: &App) {
     // todo: introduce vertical scrolling
-    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 3); // cleanup: explain this magic number
+    let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 5); // cleanup: explain this magic number
     for _ in 0..app.height-used_lines { draw_empty(); }
 
     let completions_count = app.input.filtered_completions.len();
@@ -386,6 +399,19 @@ fn draw_input(app: &App) {
         format!("[{}]", state_name(&app.input.state)), BlackBrightBg,
         app.width, DRAW_WIDTH, 0
     );
+
+    draw_empty();
+    if app.input.section_name.len() > 0 {
+        draw_line(
+            format!("Adding to {}", app.input.section_name), BlackBg, 
+            app.width, DRAW_WIDTH, 0
+        );
+    } else {
+        draw_line(
+            "Adding new meal".to_string(), BlackBg, 
+            app.width, DRAW_WIDTH, 0
+        );
+    }
 }
 
 fn refresh_completions(app: &mut App) {
