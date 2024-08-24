@@ -271,7 +271,6 @@ fn count_entry_items(entry: &parser::EntryEntity) -> usize {
 
 // INPUT VIEW
 
-#[allow(dead_code)]
 enum InputState {
     SectionName, Name, Quantity, Calories
 }
