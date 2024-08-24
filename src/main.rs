@@ -60,6 +60,7 @@ fn main() {
                 State::Input => { process_input_input(&mut app, input) },
                 State::Calendar => { process_input_calendar(&mut app, input) },
             };
+            // todo: fix not refreshing on irrelevant input
             if did_process_input {
                 should_draw = true;
             }
@@ -293,16 +294,18 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
     if input[0] == 10 { // Enter
         match app.input.state {
             InputState::SectionName => {
-                if app.input.completion_index > 0 {
+                if app.input.completion_index >= 0 {
                     app.input.section_name = app.input.filtered_completions[app.input.completion_index as usize].clone();
                 } else if app.input.query.len() > 2 {
                     // todo: trim and capitalise?
                     app.input.section_name = app.input.query.clone();
                 } else {
-                    return true; // not accepting Enter
+                    return true; // discard input // todo: fix not refreshing on irrelevant input
                 }
-                app.input.state = InputState::Name;
                 app.input.query = "".to_string();
+                app.input.state = InputState::Name;
+                app.input.completions = make_completions_for_item_name(&app.input.all_items);
+                refresh_completions(app);
             },
             InputState::Name => {
                 
