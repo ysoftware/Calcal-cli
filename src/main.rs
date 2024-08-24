@@ -1,6 +1,7 @@
 mod parser;
 mod terminal;
 use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
+use parser::{QuantityMeasurement};
 
 #[allow(unused_imports)]
 use std::process::exit;
@@ -36,24 +37,43 @@ fn main() {
         std::process::exit(1);
     });
 
-    let input = initial_input_value(&entries);
-    let list = initial_list_value(&entries);
-
-    let mut app = App {
-        should_exit: false,
-        state: State::List,
-        entries: entries,
-        width: 0,
-        height: 0,
-        list: list,
-        input: input,
-        calendar: vec![],
-    };
+    #[allow(invalid_value)] // zero init, don't tell me what to do
+    let mut app: App = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
+    for entry in &entries {
+        for section in &entry.sections {
+            for item in &section.items {
+                app.input.all_items.push(item.clone());
+            }
+        }
+    }
+    app.input.query = "".to_string();
+    app.list.selected_entry_index = entries.len() - 1;
+    app.list.item_deletion_index = -1;
+    app.entries = entries;
 
     loop {
-        if process_input(&mut app) {
+        let mut should_draw = process_window_resize(&mut app);
+
+        if let Some(input) = terminal::get_input() {
+            let did_process_input: bool = match app.state {
+                State::List => { process_input_list(&mut app, input) },
+                State::Input => { process_input_input(&mut app, input) },
+                State::Calendar => { process_input_calendar(&mut app, input) },
+            };
+            if did_process_input {
+                should_draw = true;
+            }
+        }
+
+        if should_draw {
             if app.should_exit { break }
-            draw(&app);
+
+            terminal::clear_window();
+            match app.state {
+                State::List => { draw_list(&app); },
+                State::Input => { draw_input(&app); },
+                State::Calendar => { draw_calendar(&app); },
+            }
         } else {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
@@ -69,46 +89,12 @@ fn process_window_resize(app: &mut App) -> bool {
     return did_resize_window;
 }
 
-fn process_input(app: &mut App) -> bool {
-    let did_resize_window = process_window_resize(app);
-
-    if let Some(input) = terminal::get_input() {
-        let did_process_input: bool = match app.state {
-            State::List => { process_input_list(app, input) },
-            State::Input => { process_input_input(app, input) },
-            State::Calendar => { process_input_calendar(app, input) },
-        };
-        return did_resize_window || did_process_input;
-    }
-    
-    return did_resize_window;
-}
-
-fn draw(app: &App) {
-    terminal::clear_window();
-
-    match app.state {
-        State::List => { draw_list(&app); },
-        State::Input => { draw_input(&app); },
-        State::Calendar => { draw_calendar(&app); },
-    }
-}
-
 // LIST VIEW
 
 struct List {
     selected_entry_index: usize,
     item_deletion_index: i32,
     is_showing_deletion_alert: bool,
-}
-
-fn initial_list_value(entries: &Vec<parser::EntryEntity>) -> List {
-    // todo: will it crash if entires are empty?
-    List {
-        selected_entry_index: entries.len() - 1,
-        item_deletion_index: -1,
-        is_showing_deletion_alert: false
-    }
 }
 
 fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
@@ -298,36 +284,36 @@ struct Input {
     all_items: Vec<parser::Item>,
     completion_index: i32,
     section_name: String,
-}
-
-fn initial_input_value(entries: &Vec<parser::EntryEntity>) -> Input {
-    let mut all_items: Vec<parser::Item> = vec![];
-    for entry in entries {
-        for section in &entry.sections {
-            for item in &section.items {
-                all_items.push(item.clone());
-            }
-        }
-    }
-
-    return Input {
-        state: InputState::Name,
-        query: "".to_string(),
-        completions: vec![],
-        filtered_completions: vec![],
-        all_items: all_items,
-        completion_index: -1,
-        section_name: "".to_string(),
-    };
+    name: String,
+    calories: f32,
+    quantity: f32,
+    measurement: QuantityMeasurement,
 }
 
 fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
     if input[0] == 10 { // Enter
-        if app.input.completion_index > 0 {
-            app.input.section_name = app.input.filtered_completions[app.input.completion_index as usize].clone();
-            app.input.state = InputState::Name;
-        } else {
-            // save inputted value
+        match app.input.state {
+            InputState::SectionName => {
+                if app.input.completion_index > 0 {
+                    app.input.section_name = app.input.filtered_completions[app.input.completion_index as usize].clone();
+                } else if app.input.query.len() > 2 {
+                    // todo: trim and capitalise?
+                    app.input.section_name = app.input.query.clone();
+                } else {
+                    return true; // not accepting Enter
+                }
+                app.input.state = InputState::Name;
+                app.input.query = "".to_string();
+            },
+            InputState::Name => {
+                
+            },
+            InputState::Quantity => {
+
+            },
+            InputState::Calories => {
+
+            },
         }
     } else if input[0] == 127 { // DEL // todo: not del?
         if app.input.query.len() > 0 {
@@ -395,7 +381,7 @@ fn draw_input(app: &App) {
 
     draw_empty();
     draw_line_right(
-        format!("> {}", app.input.query), BlackBg, 
+        format!("> {}", app.input.query), BlackBg,
         format!("[{}]", state_name(&app.input.state)), BlackBrightBg,
         app.width, DRAW_WIDTH, 0
     );
@@ -403,12 +389,12 @@ fn draw_input(app: &App) {
     draw_empty();
     if app.input.section_name.len() > 0 {
         draw_line(
-            format!("Adding to {}", app.input.section_name), BlackBg, 
+            format!("Adding to {} on {}", app.input.section_name, app.entries[app.list.selected_entry_index].date), BlackBg,
             app.width, DRAW_WIDTH, 0
         );
     } else {
         draw_line(
-            "Adding new meal".to_string(), BlackBg, 
+            "Adding new meal".to_string(), BlackBg,
             app.width, DRAW_WIDTH, 0
         );
     }
