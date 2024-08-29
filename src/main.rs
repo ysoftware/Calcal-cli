@@ -76,7 +76,7 @@ fn main() {
                 State::Calendar => { draw_calendar(&app); },
             }
         } else {
-            std::thread::sleep(std::time::Duration::from_millis(20));
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
     }
     terminal::restore_terminal();
@@ -230,7 +230,7 @@ fn draw_list(app: &App) {
                 } else {
                     drawn_lines += 1;
                     draw_line_right(
-                        format!("x {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                        format!("> {}, {} {}", item.title, item.quantity, item.measurement), left_color,
                         "[delete]".to_string(), RedBrightBg,
                         app.width, DRAW_WIDTH, 0
                     );
@@ -302,13 +302,24 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                 } else {
                     return true; // discard input // todo: fix not refreshing on irrelevant input
                 }
-                app.input.query = "".to_string();
                 app.input.state = InputState::Name;
                 app.input.completions = make_completions_for_item_name(&app.input.all_items);
+                app.input.query = "".to_string();
                 refresh_completions(app);
             },
             InputState::Name => {
-                
+                if app.input.completion_index >= 0 {
+                    app.input.name = app.input.filtered_completions[app.input.completion_index as usize].clone();
+                } else if app.input.query.len() > 2 {
+                    // todo: trim and capitalise?
+                    app.input.name = app.input.query.clone();
+                } else {
+                    return true; // discard input // todo: fix not refreshing on irrelevant input
+                }
+                app.input.state = InputState::Quantity;
+                app.input.completions = make_completions_for_quantity(&app.input.all_items, app.input.query.clone());
+                app.input.query = "".to_string();
+                refresh_completions(app);
             },
             InputState::Quantity => {
 
@@ -457,6 +468,10 @@ fn make_completions_for_section_name() -> Vec<String> {
         "Snack".to_string(), 
         "Snack 2".to_string()
     ].to_vec()
+}
+
+fn make_completions_for_quantity(all_items: &Vec<parser::Item>, query: String) -> Vec<String> {
+    vec![]
 }
 
 // CALENDAR VIEW
@@ -706,9 +721,9 @@ fn color_for_calories(calories: f32) -> Color {
     if calories <= 1400.0 {
         return BlackBg;
     } else if calories <= 1900.0 {
-        return GreenBrightBg;
-    } else if calories <= 2200.0 {
         return GreenBg;
+    } else if calories <= 2200.0 {
+        return CyanBg;
     } else if calories <= 2400.0 {
         return YellowBrightBg;
     } else if calories <= 2900.0 {
