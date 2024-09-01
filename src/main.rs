@@ -1,7 +1,7 @@
 mod parser;
 mod terminal;
 use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
-use parser::{QuantityMeasurement};
+use parser::{QuantityMeasurement, Item};
 
 #[allow(unused_imports)]
 use std::process::exit;
@@ -281,7 +281,7 @@ struct Input {
     query: String,
     completions: Vec<String>,
     filtered_completions: Vec<String>,
-    all_items: Vec<parser::Item>,
+    all_items: Vec<Item>,
     completion_index: i32,
     section_name: String,
     name: String,
@@ -303,6 +303,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                     return true; // discard input // todo: fix not refreshing on irrelevant input
                 }
                 app.input.state = InputState::Name;
+                app.input.completion_index = -1;
                 app.input.completions = make_completions_for_item_name(&app.input.all_items);
                 app.input.query = "".to_string();
                 refresh_completions(app);
@@ -317,7 +318,8 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                     return true; // discard input // todo: fix not refreshing on irrelevant input
                 }
                 app.input.state = InputState::Quantity;
-                app.input.completions = make_completions_for_quantity(&app.input.all_items, app.input.query.clone());
+                app.input.completion_index = -1;
+                app.input.completions = make_completions_for_quantity(&app.input.all_items, &app.input.name);
                 app.input.query = "".to_string();
                 refresh_completions(app);
             },
@@ -444,19 +446,15 @@ fn state_name(state: &InputState) -> String {
     }.to_string()
 }
 
-fn make_completions_for_item_name(all_items: &Vec<parser::Item>) -> Vec<String> {
-    let mut result: Vec<String> = vec![];
-
-    let mut seen = std::collections::HashSet::new();
-    let mut unique_items = all_items.clone();
-    unique_items.retain(|item| 
-        seen.insert(format!("{} {}", item.title, item.measurement))
+fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<String> {
+    let unique_items = remove_duplicates(&all_items, |item|
+        format!("{} {}", item.title, item.measurement)
     );
 
+    let mut result: Vec<String> = vec![];
     for item in unique_items { 
         result.push(format!("{} (in {})", item.title, item.measurement));
     }
-
     return result;
 }
 
@@ -470,8 +468,43 @@ fn make_completions_for_section_name() -> Vec<String> {
     ].to_vec()
 }
 
-fn make_completions_for_quantity(all_items: &Vec<parser::Item>, query: String) -> Vec<String> {
-    vec![]
+fn make_completions_for_quantity(all_items: &Vec<Item>, item_name: &String) -> Vec<String> {
+    let filtered_items = all_items.into_iter().cloned().filter(|item| 
+        item.title == *item_name
+    ).collect();
+
+    let mut unique_items = remove_duplicates(&filtered_items, |item|
+        format!("{} {}", item.quantity, item.measurement)
+    );
+
+    unique_items.sort_by(|lhs, rhs| 
+        lhs.quantity.partial_cmp(&rhs.quantity).unwrap()
+    );
+    
+    let mut result: Vec<String> = vec![];
+    for item in &unique_items { 
+        result.push(format!("{} (in {})", item.title, item.measurement));
+
+    }
+
+    // println!("{}", item_name);
+    // println!("0 - {}, 1 - {}, 2 - {}, 3 - {}\n", all_items.len(), filtered_items.len(), unique_items.len(), result.len());
+    // exit(1);
+
+    return result;
+}
+
+fn remove_duplicates(items: &Vec<Item>, predicate: fn(&Item) -> String) -> Vec<Item> {
+    let mut result: Vec<Item> = vec![];
+    let mut seen = std::collections::HashSet::new();
+    let mut unique_items = items.clone();
+    unique_items.retain(|item| 
+        seen.insert(predicate(item))
+    );
+    for item in unique_items { 
+        result.push(item);
+    }
+    return result;
 }
 
 // CALENDAR VIEW
