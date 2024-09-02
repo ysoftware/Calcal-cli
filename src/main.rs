@@ -2,6 +2,7 @@ mod parser;
 mod terminal;
 use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
 use parser::{QuantityMeasurement, Item};
+use std::collections::HashMap;
 
 #[allow(unused_imports)]
 use std::process::exit;
@@ -22,20 +23,24 @@ struct App {
 }
 
 fn main() {
-    terminal::prepare_terminal();
-    terminal::clear_window();
+    terminal::restore_terminal();
     parser::test_all();
 
     println!("Starting download...");
     let response_string = make_http_request().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
-        std::process::exit(1);
+        terminal::restore_terminal();
+        exit(1);
     });
 
     let entries = parser::parse_entities(response_string).unwrap_or_else(|error| {
         eprintln!("An error occured while parsing response: {error}");
-        std::process::exit(1);
+        terminal::restore_terminal();
+        exit(1);
     });
+
+    terminal::prepare_terminal();
+    terminal::clear_window();
 
     #[allow(invalid_value)] // zero init, don't tell me what to do
     let mut app: App = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
@@ -60,7 +65,7 @@ fn main() {
                 State::Input => { process_input_input(&mut app, input) },
                 State::Calendar => { process_input_calendar(&mut app, input) },
             };
-            // todo: fix not refreshing on irrelevant input
+            // TODO: fix not refreshing on irrelevant input
             if did_process_input {
                 should_draw = true;
             }
@@ -154,12 +159,11 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.list.item_deletion_index = -1;
         app.input.completion_index = 0;
 
-        // todo: get last section id
+        // TODO: get last section id
         app.input.section_name = "Fake meal".to_string();
     } else if char_input == 's' || char_input == 'ы' { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
-        app.input.completions = make_completions_for_section_name();
         refresh_completions(app);
         app.list.item_deletion_index = -1;
         app.input.completion_index = 0;
@@ -248,7 +252,7 @@ fn draw_list(app: &App) {
         }
     }
 
-    // todo: introduce vertical scrolling
+    // TODO: introduce vertical scrolling
     let used_lines = std::cmp::min(app.height, drawn_lines + 3); // cleanup: explain this magic number
     for _ in 0..app.height-used_lines { draw_empty(); }
 
@@ -272,15 +276,23 @@ fn count_entry_items(entry: &parser::EntryEntity) -> usize {
 
 // INPUT VIEW
 
+#[derive(PartialEq)]
 enum InputState {
     SectionName, Name, Quantity, Calories
+}
+
+#[derive(Clone)]
+struct Completion {
+    label: String,
+    filter: String,
+    item: Item,
 }
 
 struct Input {
     state: InputState,
     query: String,
-    completions: Vec<String>,
-    filtered_completions: Vec<String>,
+    completions: Vec<Completion>,
+    filtered_completions: Vec<Completion>,
     all_items: Vec<Item>,
     completion_index: i32,
     section_name: String,
@@ -295,12 +307,12 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
         match app.input.state {
             InputState::SectionName => {
                 if app.input.completion_index >= 0 {
-                    app.input.section_name = app.input.filtered_completions[app.input.completion_index as usize].clone();
+                    app.input.section_name = make_completions_for_section_name()[app.input.completion_index as usize].clone();
                 } else if app.input.query.len() > 2 {
-                    // todo: trim and capitalise?
+                    // TODO: trim and capitalise?
                     app.input.section_name = app.input.query.clone();
                 } else {
-                    return true; // discard input // todo: fix not refreshing on irrelevant input
+                    return true; // discard input // TODO: fix not refreshing on irrelevant input
                 }
                 app.input.state = InputState::Name;
                 app.input.completion_index = -1;
@@ -310,12 +322,12 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             },
             InputState::Name => {
                 if app.input.completion_index >= 0 {
-                    app.input.name = app.input.filtered_completions[app.input.completion_index as usize].clone();
+                    app.input.name = app.input.filtered_completions[app.input.completion_index as usize].item.title.clone();
                 } else if app.input.query.len() > 2 {
-                    // todo: trim and capitalise?
+                    // TODO: trim and capitalise?
                     app.input.name = app.input.query.clone();
                 } else {
-                    return true; // discard input // todo: fix not refreshing on irrelevant input
+                    return true; // discard input // TODO: fix not refreshing on irrelevant input
                 }
                 app.input.state = InputState::Quantity;
                 app.input.completion_index = -1;
@@ -330,7 +342,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
 
             },
         }
-    } else if input[0] == 127 { // DEL // todo: not del?
+    } else if input[0] == 127 { // DEL // TODO: not del?
         if app.input.query.len() > 0 {
             app.input.query.pop();
             app.input.completion_index = -1;
@@ -353,7 +365,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             app.input.query.push('ü');
             app.input.completion_index = -1;
         } else if input[1] == 111 {
-            app.input.query.push('ö'); // todo: type ó for Jamón
+            app.input.query.push('ö'); // TODO: type ó for Jamón
             app.input.completion_index = -1;
         } else if input[1] == 97 {
             app.input.query.push('ä');
@@ -373,7 +385,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                     app.input.completion_index = -1;
                 }
             }
-        } // todo: holding arrow up/down starts printing [[[[
+        } // TODO: holding arrow up/down starts printing [[[[
     }
 
     refresh_completions(app);
@@ -382,7 +394,6 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
 }
 
 fn draw_input(app: &App) {
-    // todo: introduce vertical scrolling
     let used_lines = std::cmp::min(app.height, app.input.filtered_completions.len() + 5); // cleanup: explain this magic number
     for _ in 0..app.height-used_lines { draw_empty(); }
 
@@ -391,7 +402,37 @@ fn draw_input(app: &App) {
         let reversed_index = completions_count-1-i;
         let completion = &app.input.filtered_completions[reversed_index];
         let color = if (reversed_index as i32) == app.input.completion_index { BlueBg } else { White };
-        draw_line(format!("{}", completion), color, app.width, DRAW_WIDTH, 0);
+
+        match &app.input.state {
+            InputState::SectionName => {
+                
+            },
+            InputState::Name => {
+                if app.input.query.len() > 0 {
+                    draw_line(
+                        format!("{}", completion.item.title), 
+                        color, app.width, DRAW_WIDTH, 0
+                    );
+                } else {
+                    draw_line(
+                        completion.label.clone(),
+                        color, app.width, DRAW_WIDTH, 0
+                    );
+                }
+            },
+            InputState::Calories => {
+                draw_line(
+                    format!("{}", completion.item.title), 
+                    color, app.width, DRAW_WIDTH, 0
+                );
+            },
+            InputState::Quantity => {
+                draw_line(
+                    format!("{} ({} {})", completion.item.title, completion.item.quantity, completion.item.measurement), 
+                    color, app.width, DRAW_WIDTH, 0
+                );
+            },
+        }
     }
 
     draw_empty();
@@ -420,7 +461,7 @@ fn refresh_completions(app: &mut App) {
     if clean_query.len() > 0 {
         app.input.filtered_completions = vec![];
         for completion in &app.input.completions {
-            if completion.to_lowercase().contains(&clean_query) {
+            if completion.filter.to_lowercase().contains(&clean_query) {
                 app.input.filtered_completions.push(completion.clone());
             }
 
@@ -446,16 +487,37 @@ fn state_name(state: &InputState) -> String {
     }.to_string()
 }
 
-fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<String> {
-    let unique_items = remove_duplicates(&all_items, |item|
-        format!("{} {}", item.title, item.measurement)
+fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
+    let mut dict: HashMap<String, (Completion, usize)> = HashMap::new();
+
+    for item in all_items {
+        let query = format!("{} {} {}", item.title, item.quantity, item.measurement);
+        let completion = Completion {
+            label: "".to_string(),
+            filter: format!("{}", item.title),
+            item: item.clone(),
+        };
+
+        if !dict.contains_key(&query) {
+            dict.insert(query, (completion, 1));
+        } else {
+            dict.get_mut(&query).unwrap().1 += 1;
+        }
+    }
+
+    let mut values: Vec<(Completion, usize)> = dict.into_values().collect();
+    values.sort_by(|lhs, rhs| 
+        rhs.1.partial_cmp(&lhs.1).unwrap()
     );
 
-    let mut result: Vec<String> = vec![];
-    for item in unique_items { 
-        result.push(format!("{} (in {})", item.title, item.measurement));
+    for i in 0..values.len() {
+        let item = &values[i].0.item;
+        values[i].0.label = format!("{} {} {} {} (x{})", item.title, item.quantity, item.measurement, item.calories, values[i].1);
+
+        println!("{}", values[i].1);
     }
-    return result;
+
+    return values.into_iter().map(|value| value.0).collect();
 }
 
 fn make_completions_for_section_name() -> Vec<String> {
@@ -468,30 +530,26 @@ fn make_completions_for_section_name() -> Vec<String> {
     ].to_vec()
 }
 
-fn make_completions_for_quantity(all_items: &Vec<Item>, item_name: &String) -> Vec<String> {
-    let filtered_items = all_items.into_iter().cloned().filter(|item| 
-        item.title == *item_name
-    ).collect();
+fn make_completions_for_quantity(all_items: &Vec<Item>, item_name: &String) -> Vec<Completion> {
+    return vec![];
+    // let filtered_items = all_items.into_iter().cloned().filter(|item|
+    //     item.title.to_lowercase() == *item_name.to_lowercase()
+    // ).collect();
 
-    let mut unique_items = remove_duplicates(&filtered_items, |item|
-        format!("{} {}", item.quantity, item.measurement)
-    );
+    // let mut unique_items = remove_duplicates(&filtered_items, |item|
+    //     format!("{} {}", item.quantity, item.measurement)
+    // );
 
-    unique_items.sort_by(|lhs, rhs| 
-        lhs.quantity.partial_cmp(&rhs.quantity).unwrap()
-    );
+    // unique_items.sort_by(|lhs, rhs| 
+    //     lhs.quantity.partial_cmp(&rhs.quantity).unwrap()
+    // );
     
-    let mut result: Vec<String> = vec![];
-    for item in &unique_items { 
-        result.push(format!("{} (in {})", item.title, item.measurement));
+    // let mut result: Vec<Item> = vec![];
+    // for item in &unique_items { 
+    //     result.push(item.clone());
+    // }
 
-    }
-
-    // println!("{}", item_name);
-    // println!("0 - {}, 1 - {}, 2 - {}, 3 - {}\n", all_items.len(), filtered_items.len(), unique_items.len(), result.len());
-    // exit(1);
-
-    return result;
+    // return result;
 }
 
 fn remove_duplicates(items: &Vec<Item>, predicate: fn(&Item) -> String) -> Vec<Item> {
@@ -714,7 +772,6 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
         );
     }
     
-    // std::process::exit(1);
     return months;
 }
 
@@ -809,7 +866,7 @@ fn draw_line_right(
         print!("{}{}", color_start(&color_left), string_left);
 
         let mut spacing = draw_width - (length_left + length_right);
-        if left_limit > 0 && spacing > 1 { // todo: spacing > 1? >2?
+        if left_limit > 0 && spacing > 1 { // TODO: spacing > 1? >2?
             spacing = std::cmp::min(spacing, left_limit - (length_left));
         }
         for _ in 0..spacing { print!(" "); }
@@ -837,14 +894,14 @@ fn truncate(s: String, n: usize) -> String {
         return s[..m].to_string();
     } else {
         println!("Unable to truncate string \"{}\" by {} characters.", s, n);
-        std::process::exit(1);
+        exit(1);
     }
 }
 
 // REQUEST
 
 fn make_http_request() -> Result<String, parser::Error> {
-    Ok(minreq::get("https://whoniverse-app.com/calcal/main.php")
+    Ok(minreq::get("http://185.163.118.53/main.php")
         .send()
         .map_err(|_e| { parser::Error::InvalidResponse })?
         .as_str()
