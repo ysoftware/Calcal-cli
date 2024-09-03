@@ -27,7 +27,7 @@ fn main() {
     parser::test_all();
 
     println!("Starting download...");
-    let response_string = make_http_request().unwrap_or_else(|error| {
+    let response_string = get_data().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
         terminal::restore_terminal();
         exit(1);
@@ -932,11 +932,51 @@ fn truncate(s: String, n: usize) -> String {
 
 // REQUEST
 
-fn make_http_request() -> Result<String, parser::Error> {
-    Ok(minreq::get("http://185.163.118.53/main.php")
+// const URL: &str = "http://185.163.118.53/main.php";
+const URL: &str = "http://localhost:7777/main.php";
+
+fn get_data() -> Result<String, parser::Error> {
+    Ok(minreq::get(URL)
         .send()
         .map_err(|_e| { parser::Error::InvalidResponse })?
         .as_str()
         .map_err(|_e| { parser::Error::ExpectedEOF })?
         .to_owned())
+}
+
+fn encode_entities(entities: Vec<parser::EntryEntity>) -> String {
+    todo!()
+}
+
+fn post_data(content: String) -> Result<String, parser::Error> {
+    let password = "";
+    let boundary = "REQUEST_BOUNDARY";
+
+    let mut body = "".to_string();
+
+    // content
+    body += &format!("--{}\r\n", boundary);
+    body += "Content-Disposition: form-data; name=\"file\"; filename=\"text.txt\"\r\n";
+    body += "Content-Type: text/plain\r\n\r\n";
+    body += &content;
+    body += "\r\n";
+
+    // password
+    body += &format!("--{}\r\n", boundary);
+    body += "Content-Disposition: form-data; name=\"password\"\r\n";
+    body += "Content-Type: text/plain\r\n\r\n";
+    body += password;
+    body += "\r\n";
+
+    body += &format!("--{}--\r\n", boundary);
+
+    Ok(minreq::post(URL)
+        .with_header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .with_body(body)
+        .send()
+        .map_err(|_e| { parser::Error::InvalidResponse })?
+        .as_str()
+        .map_err(|_e| { parser::Error::ExpectedEOF })?
+        .to_owned()
+    )
 }
