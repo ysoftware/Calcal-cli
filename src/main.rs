@@ -949,7 +949,7 @@ fn encode_entities(entities: Vec<parser::EntryEntity>) -> String {
 }
 
 fn post_data(content: String) -> Result<String, parser::Error> {
-    let password = "";
+    let password = std::fs::read_to_string("password.txt").expect("Missing password.txt file.");
     let boundary = "REQUEST_BOUNDARY";
 
     let mut body = "".to_string();
@@ -965,7 +965,7 @@ fn post_data(content: String) -> Result<String, parser::Error> {
     body += &format!("--{}\r\n", boundary);
     body += "Content-Disposition: form-data; name=\"password\"\r\n";
     body += "Content-Type: text/plain\r\n\r\n";
-    body += password;
+    body += &password;
     body += "\r\n";
 
     body += &format!("--{}--\r\n", boundary);
