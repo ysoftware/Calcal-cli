@@ -322,7 +322,14 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             },
             InputState::Name => {
                 if app.input.completion_index >= 0 {
-                    app.input.name = app.input.filtered_completions[app.input.completion_index as usize].item.title.clone();
+                    let section_name = app.input.section_name.clone();
+                    append_item(
+                        app,
+                        app.list.selected_entry_index, 
+                        &section_name,
+                        app.input.filtered_completions[app.input.completion_index as usize].item.clone()
+                    );
+                    return true;
                 } else if app.input.query.len() > 2 {
                     // TODO: trim and capitalise?
                     app.input.name = app.input.query.clone();
@@ -453,6 +460,26 @@ fn draw_input(app: &App) {
             "Adding new meal".to_string(), BlackBg,
             app.width, DRAW_WIDTH, 0
         );
+    }
+}
+
+fn append_item(app: &mut App, entry_index: usize, section_id: &String, item: Item) {
+    let entry = &app.entries[entry_index];
+    if let Some(section_index) = &entry.sections.iter().position(|section| section.id == *section_id) {
+        app.entries[entry_index].sections[*section_index].items.push(item.clone());
+        app.state = State::List;
+        app.input.query = "".to_string();
+        app.input.completion_index = -1;
+    } else {
+        let items = [item.clone()].to_vec();
+        let new_section = parser::EntrySectionEntity { 
+            id: section_id.to_string(), 
+            items: items 
+        };
+        app.entries[entry_index].sections.push(new_section);
+        app.state = State::List;
+        app.input.query = "".to_string();
+        app.input.completion_index = -1;
     }
 }
 
