@@ -160,7 +160,12 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.input.completion_index = 0;
 
         // TODO: get last section id
-        app.input.section_name = "Fake meal".to_string();
+
+        if let Some(section) = app.entries[app.list.selected_entry_index].sections.last() {
+            app.input.section_name = section.id.clone();
+        } else {
+            app.input.section_name = "Breakfast".to_string();
+        }
     } else if char_input == 's' || char_input == 'ы' { 
         app.state = State::Input;
         app.input.state = InputState::SectionName;
