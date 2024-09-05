@@ -9,7 +9,7 @@ use std::process::exit;
 
 const DRAW_WIDTH: usize = 52;
 
-enum State { List, Input, Calendar }
+enum State { Updating, List, Input, Calendar }
 
 struct App {
     should_exit: bool,
@@ -23,44 +23,21 @@ struct App {
 }
 
 fn main() {
-    terminal::restore_terminal();
     parser::test_all();
-
-    println!("Starting download...");
-    let response_string = get_data().unwrap_or_else(|error| {
-        eprintln!("An error occured while making http request: {error}");
-        terminal::restore_terminal();
-        exit(1);
-    });
-
-    let entries = parser::parse_entities(response_string).unwrap_or_else(|error| {
-        eprintln!("An error occured while parsing response: {error}");
-        terminal::restore_terminal();
-        exit(1);
-    });
-
-    terminal::prepare_terminal();
-    terminal::clear_window();
 
     #[allow(invalid_value)] // zero init, don't tell me what to do
     let mut app: App = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
-    for entry in &entries {
-        for section in &entry.sections {
-            for item in &section.items {
-                app.input.all_items.push(item.clone());
-            }
-        }
-    }
-    app.input.query = "".to_string();
-    app.list.selected_entry_index = entries.len() - 1;
-    app.list.item_deletion_index = -1;
-    app.entries = entries;
+    terminal::prepare_terminal();
+    terminal::clear_window();
+
+    download_data(&mut app);
 
     loop {
         let mut should_draw = process_window_resize(&mut app);
 
         if let Some(input) = terminal::get_input() {
             let did_process_input: bool = match app.state {
+                State::Updating => { true },
                 State::List => { process_input_list(&mut app, input) },
                 State::Input => { process_input_input(&mut app, input) },
                 State::Calendar => { process_input_calendar(&mut app, input) },
@@ -76,6 +53,7 @@ fn main() {
 
             terminal::clear_window();
             match app.state {
+                State::Updating => { println!("Updating data..."); },
                 State::List => { draw_list(&app); },
                 State::Input => { draw_input(&app); },
                 State::Calendar => { draw_calendar(&app); },
@@ -113,7 +91,32 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
 
     if app.list.is_showing_deletion_alert {
         if char_input == 'y' {
-            // delete the item
+            let entry = &app.entries[app.list.selected_entry_index];
+            let mut count = 0;
+            let mut section_index = entry.sections.len() - 1;
+            let mut item_index: i64 = 0;
+
+            // find selected section_index and item_index from item_deletion_index (counts backwards)
+            'outer: for s_idx in (0..entry.sections.len()).rev() {
+                let items_count = entry.sections[s_idx].items.len();
+                item_index = (items_count as i64) - 1;
+                for _ in (0..items_count).rev() {
+                    if count == app.list.item_deletion_index {
+                        break 'outer;
+                    }
+                    count += 1;
+                    item_index -= 1;
+                }
+                item_index = 0;
+                section_index -= 1;
+            }
+
+            if entry.sections[section_index].items.len() == 1 {
+                app.entries[app.list.selected_entry_index].sections.remove(section_index);
+            } else {
+                app.entries[app.list.selected_entry_index].sections[section_index].items.remove(item_index as usize);
+            }
+            upload_data(app);
         }
         app.list.is_showing_deletion_alert = false;
         app.list.item_deletion_index = -1;
@@ -124,30 +127,36 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         if app.list.item_deletion_index >= 0 {
             app.list.is_showing_deletion_alert = true;
         }
-    } else if input[0] == 27 && input[1] == 91 {
-        if input[2] == 68 { // arrow left
-            if app.list.selected_entry_index > 0 {
-                app.list.selected_entry_index -= 1;
+    } else if input[0] == 27 {
+        if input[1] == 0 { // Esc
+            if app.list.item_deletion_index >= 0 {
                 app.list.item_deletion_index = -1;
             }
-        } else if input[2] == 67 { // arrow right
-            if app.list.selected_entry_index + 1 < app.entries.len() {
-                app.list.selected_entry_index += 1;
-                app.list.item_deletion_index = -1;
-            }
-        } else if input[1] == 91 && input[2] == 66 { // arrow down
-            if app.list.item_deletion_index > -1 {
-                app.list.item_deletion_index -= 1;
-            } else if selected_entry_items_count > 0 {
-                app.list.item_deletion_index = (selected_entry_items_count - 1) as i32;
-            }
-        } else if input[1] == 91 && input[2] == 65 { // arrow up
-            if selected_entry_items_count > 0 {
-                if (app.list.item_deletion_index as usize) < selected_entry_items_count - 1 
-                    || app.list.item_deletion_index == -1 {
-                        app.list.item_deletion_index += 1;
-                    } else {
-                        app.list.item_deletion_index = -1;
+        } else if input[1] == 91 {
+            if input[2] == 68 { // arrow left
+                if app.list.selected_entry_index > 0 {
+                    app.list.selected_entry_index -= 1;
+                    app.list.item_deletion_index = -1;
+                }
+            } else if input[2] == 67 { // arrow right
+                if app.list.selected_entry_index + 1 < app.entries.len() {
+                    app.list.selected_entry_index += 1;
+                    app.list.item_deletion_index = -1;
+                }
+            } else if input[2] == 66 { // arrow down
+                if app.list.item_deletion_index > -1 {
+                    app.list.item_deletion_index -= 1;
+                } else if selected_entry_items_count > 0 {
+                    app.list.item_deletion_index = (selected_entry_items_count - 1) as i32;
+                }
+            } else if input[2] == 65 { // arrow up
+                if selected_entry_items_count > 0 {
+                    if (app.list.item_deletion_index as usize) < selected_entry_items_count - 1 
+                        || app.list.item_deletion_index == -1 {
+                            app.list.item_deletion_index += 1;
+                        } else {
+                            app.list.item_deletion_index = -1;
+                    }
                 }
             }
         }
@@ -333,6 +342,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                         &section_name,
                         app.input.filtered_completions[app.input.completion_index as usize].item.as_ref().unwrap().clone()
                     );
+                    upload_data(app);
                     return true;
                 } else if app.input.query.len() > 2 {
                     // TODO: trim and capitalise?
@@ -533,7 +543,7 @@ fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
     let mut dict: HashMap<String, (Completion, usize)> = HashMap::new();
 
     for item in all_items {
-        let query = format!("{} {} {}", item.title, item.quantity, item.measurement);
+        let query = format!("{} {}", item.title, measurement_display_value(&item.quantity, &item.measurement));
         let completion = Completion {
             label: "".to_string(),
             filter: format!("{}", item.title),
@@ -554,7 +564,8 @@ fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
 
     for i in 0..values.len() {
         if let Some(item) = &values[i].0.item {
-            values[i].0.label = format!("{} {} {} {} (x{})", item.title, item.quantity, item.measurement, item.calories, values[i].1);
+            values[i].0.label = format!("{}, {}, {} kcal (x{})", 
+                item.title, measurement_display_value(&item.quantity, &item.measurement), item.calories, values[i].1);
         }
     }
 
@@ -942,6 +953,7 @@ fn truncate(s: String, n: usize) -> String {
         return s[..m].to_string();
     } else {
         println!("Unable to truncate string \"{}\" by {} characters.", s, n);
+        terminal::restore_terminal();
         exit(1);
     }
 }
@@ -960,7 +972,7 @@ fn get_data() -> Result<String, parser::Error> {
         .to_owned())
 }
 
-fn post_data(content: String) -> Result<String, parser::Error> {
+fn post_data(content: String) -> Result<minreq::Response, minreq::Error> {
     let password = std::fs::read_to_string("password.txt").expect("Missing password.txt file.");
     let boundary = "REQUEST_BOUNDARY";
 
@@ -970,25 +982,70 @@ fn post_data(content: String) -> Result<String, parser::Error> {
     body += &format!("--{}\r\n", boundary);
     body += "Content-Disposition: form-data; name=\"file\"; filename=\"text.txt\"\r\n";
     body += "Content-Type: text/plain\r\n\r\n";
-    body += &content;
+    body += &content.trim();
     body += "\r\n";
 
     // password
     body += &format!("--{}\r\n", boundary);
     body += "Content-Disposition: form-data; name=\"password\"\r\n";
     body += "Content-Type: text/plain\r\n\r\n";
-    body += &password;
+    body += &password.trim();
     body += "\r\n";
 
     body += &format!("--{}--\r\n", boundary);
-
-    Ok(minreq::post(URL)
+    
+    return minreq::post(URL)
         .with_header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
         .with_body(body)
-        .send()
-        .map_err(|_e| { parser::Error::InvalidResponse })?
-        .as_str()
-        .map_err(|_e| { parser::Error::ExpectedEOF })?
-        .to_owned()
-    )
+        .send();
+}
+
+fn download_data(app: &mut App) {
+    println!("Starting download...");
+    let response_string = get_data().unwrap_or_else(|error| {
+        eprintln!("An error occured while making http request: {error}");
+        terminal::restore_terminal();
+        exit(1);
+    });
+
+    let entries = parser::parse_entities(response_string).unwrap_or_else(|error| {
+        eprintln!("An error occured while parsing response: {error}");
+        terminal::restore_terminal();
+        exit(1);
+    });
+
+    for entry in &entries {
+        for section in &entry.sections {
+            for item in &section.items {
+                app.input.all_items.push(item.clone());
+            }
+        }
+    }
+
+    app.input.query = "".to_string();
+    app.list.selected_entry_index = entries.len() - 1;
+    app.list.item_deletion_index = -1;
+    app.entries = entries;
+    app.state = State::List;
+}
+
+fn upload_data(app: &mut App) {
+    let data = parser::encode_entries(&app.entries);
+    let response = post_data(data).unwrap_or_else(|error| {
+        eprintln!("An error occured while making http request: {error}");
+        terminal::restore_terminal();
+        exit(1);
+    });
+
+    if response.status_code != 200 {
+        for (key, value) in response.headers {
+            eprintln!("{}: {}", key, value);
+        }
+        eprintln!("{}", response.reason_phrase);
+        eprintln!("Error code {} - {} when posting data to: {}", response.status_code, response.reason_phrase, URL);
+        terminal::restore_terminal();
+        exit(1);
+    }
+
+    download_data(app);
 }

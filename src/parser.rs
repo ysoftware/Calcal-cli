@@ -556,18 +556,18 @@ fn test_get_quantity() {
     }
 }
 
-pub fn encode_entities(entities: Vec<EntryEntity>) -> String {
+pub fn encode_entries(entities: &Vec<EntryEntity>) -> String {
     let mut result = "".to_string();
 
     for entity in entities {
         let mut entry_text = "".to_string();
         let mut total_calories = 0.0;
 
-        for section in entity.sections {
+        for section in &entity.sections {
             let mut items_text = "".to_string();
             let mut section_calories = 0.0;
 
-            for item in section.items {
+            for item in &section.items {
                 let quantity_value = measurement_display_value(&item.quantity, &item.measurement);
                 items_text.push_str(
                     &format!("- {}, {}, {} kcal\n",
