@@ -9,7 +9,7 @@ use std::process::exit;
 
 const DRAW_WIDTH: usize = 52;
 
-enum State { Updating, List, Input, Calendar }
+enum State { List, Input, Calendar }
 
 struct App {
     should_exit: bool,
@@ -27,17 +27,17 @@ fn main() {
 
     #[allow(invalid_value)] // zero init, don't tell me what to do
     let mut app: App = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
-    terminal::prepare_terminal();
-    terminal::clear_window();
 
     download_data(&mut app);
+
+    terminal::prepare_terminal();
+    terminal::clear_window();
 
     loop {
         let mut should_draw = process_window_resize(&mut app);
 
         if let Some(input) = terminal::get_input() {
             let did_process_input: bool = match app.state {
-                State::Updating => { true },
                 State::List => { process_input_list(&mut app, input) },
                 State::Input => { process_input_input(&mut app, input) },
                 State::Calendar => { process_input_calendar(&mut app, input) },
@@ -53,7 +53,6 @@ fn main() {
 
             terminal::clear_window();
             match app.state {
-                State::Updating => { println!("Updating data..."); },
                 State::List => { draw_list(&app); },
                 State::Input => { draw_input(&app); },
                 State::Calendar => { draw_calendar(&app); },
@@ -499,7 +498,7 @@ fn append_item(app: &mut App, entry_index: usize, section_id: &String, item: Ite
         let items = [item.clone()].to_vec();
         let new_section = parser::EntrySectionEntity { 
             id: section_id.to_string(), 
-            items: items 
+            items 
         };
         app.entries[entry_index].sections.push(new_section);
         app.state = State::List;
@@ -608,19 +607,6 @@ fn make_completions_for_quantity(all_items: &Vec<Item>, item_name: &String) -> V
     // }
 
     // return result;
-}
-
-fn remove_duplicates(items: &Vec<Item>, predicate: fn(&Item) -> String) -> Vec<Item> {
-    let mut result: Vec<Item> = vec![];
-    let mut seen = std::collections::HashSet::new();
-    let mut unique_items = items.clone();
-    unique_items.retain(|item| 
-        seen.insert(predicate(item))
-    );
-    for item in unique_items { 
-        result.push(item);
-    }
-    return result;
 }
 
 // CALENDAR VIEW
@@ -1001,7 +987,9 @@ fn post_data(content: String) -> Result<minreq::Response, minreq::Error> {
 }
 
 fn download_data(app: &mut App) {
-    println!("Starting download...");
+    terminal::clear_window();
+    println!("Loading data...");
+
     let response_string = get_data().unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
         terminal::restore_terminal();
@@ -1030,6 +1018,9 @@ fn download_data(app: &mut App) {
 }
 
 fn upload_data(app: &mut App) {
+    terminal::clear_window();
+    println!("Uploading data...");
+
     let data = parser::encode_entries(&app.entries);
     let response = post_data(data).unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
