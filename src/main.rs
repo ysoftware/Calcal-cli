@@ -1,7 +1,7 @@
 mod parser;
 mod terminal;
 use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
-use parser::{QuantityMeasurement, Item};
+use parser::{QuantityMeasurement, Item, measurement_display_value};
 use std::collections::HashMap;
 
 #[allow(unused_imports)]
@@ -239,7 +239,7 @@ fn draw_list(app: &App) {
                 } else {
                     drawn_lines += 1;
                     draw_line_right(
-                        format!("> {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                        format!("> {}, {}", item.title, measurement_display_value(&item.quantity, &item.measurement)), left_color,
                         "[delete]".to_string(), RedBrightBg,
                         app.width, DRAW_WIDTH, 0
                     );
@@ -248,7 +248,7 @@ fn draw_list(app: &App) {
                 let right_color = if i % 2 == 1 { White } else { BlackBg };
                 drawn_lines += 1;
                 draw_line_right(
-                    format!("- {}, {} {}", item.title, item.quantity, item.measurement), left_color,
+                    format!("- {}, {}", item.title, measurement_display_value(&item.quantity, &item.measurement)), left_color,
                     format!("{} kcal", item.calories), right_color,
                     app.width, DRAW_WIDTH, 0
                 );
@@ -440,7 +440,10 @@ fn draw_input(app: &App) {
             },
             InputState::Quantity => {
                 draw_line(
-                    format!("{} ({} {})", completion.item.title, completion.item.quantity, completion.item.measurement), 
+                    format!("{} ({})", 
+                        completion.item.title, 
+                        measurement_display_value(&completion.item.quantity, &completion.item.measurement)
+                    ),
                     color, app.width, DRAW_WIDTH, 0
                 );
             },
@@ -737,6 +740,7 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
                     let mut count = 0;
                     for row in &rows {
                         for cell in row {
+                            // TODO: skip missing days? I had this bug when I was missing september 2 and 3
                             if cell.text.trim().len() > 0 {
                                 total += cell.text.trim().parse::<f32>().unwrap();
                                 count += 1;
@@ -942,10 +946,6 @@ fn get_data() -> Result<String, parser::Error> {
         .as_str()
         .map_err(|_e| { parser::Error::ExpectedEOF })?
         .to_owned())
-}
-
-fn encode_entities(entities: Vec<parser::EntryEntity>) -> String {
-    todo!()
 }
 
 fn post_data(content: String) -> Result<String, parser::Error> {
