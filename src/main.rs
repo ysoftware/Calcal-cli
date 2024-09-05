@@ -159,16 +159,15 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.list.item_deletion_index = -1;
         app.input.completion_index = 0;
 
-        // TODO: get last section id
-
         if let Some(section) = app.entries[app.list.selected_entry_index].sections.last() {
             app.input.section_name = section.id.clone();
         } else {
             app.input.section_name = "Breakfast".to_string();
         }
-    } else if char_input == 's' || char_input == 'ы' { 
+    } else if char_input == 's' || char_input == 'ы' {
         app.state = State::Input;
         app.input.state = InputState::SectionName;
+        app.input.completions = make_completions_for_section_name();
         refresh_completions(app);
         app.list.item_deletion_index = -1;
         app.input.completion_index = 0;
@@ -290,7 +289,7 @@ enum InputState {
 struct Completion {
     label: String,
     filter: String,
-    item: Item,
+    item: Option<Item>,
 }
 
 struct Input {
@@ -312,7 +311,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
         match app.input.state {
             InputState::SectionName => {
                 if app.input.completion_index >= 0 {
-                    app.input.section_name = make_completions_for_section_name()[app.input.completion_index as usize].clone();
+                    app.input.section_name = make_completions_for_section_name()[app.input.completion_index as usize].label.clone();
                 } else if app.input.query.len() > 2 {
                     // TODO: trim and capitalise?
                     app.input.section_name = app.input.query.clone();
@@ -332,7 +331,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                         app,
                         app.list.selected_entry_index, 
                         &section_name,
-                        app.input.filtered_completions[app.input.completion_index as usize].item.clone()
+                        app.input.filtered_completions[app.input.completion_index as usize].item.as_ref().unwrap().clone()
                     );
                     return true;
                 } else if app.input.query.len() > 2 {
@@ -417,12 +416,22 @@ fn draw_input(app: &App) {
 
         match &app.input.state {
             InputState::SectionName => {
-                
+                if app.input.query.len() > 0 {
+                    draw_line(
+                        format!("{}", completion.label), 
+                        color, app.width, DRAW_WIDTH, 0
+                    );
+                } else {
+                    draw_line(
+                        completion.label.clone(),
+                        color, app.width, DRAW_WIDTH, 0
+                    );
+                }
             },
             InputState::Name => {
                 if app.input.query.len() > 0 {
                     draw_line(
-                        format!("{}", completion.item.title), 
+                        format!("{}", completion.item.as_ref().unwrap().title), 
                         color, app.width, DRAW_WIDTH, 0
                     );
                 } else {
@@ -434,16 +443,14 @@ fn draw_input(app: &App) {
             },
             InputState::Calories => {
                 draw_line(
-                    format!("{}", completion.item.title), 
+                    format!("{}", completion.item.as_ref().unwrap().title), 
                     color, app.width, DRAW_WIDTH, 0
                 );
             },
             InputState::Quantity => {
+                let item = completion.item.as_ref().unwrap();
                 draw_line(
-                    format!("{} ({})", 
-                        completion.item.title, 
-                        measurement_display_value(&completion.item.quantity, &completion.item.measurement)
-                    ),
+                    format!("{} ({})", item.title, measurement_display_value(&item.quantity, &item.measurement)),
                     color, app.width, DRAW_WIDTH, 0
                 );
             },
@@ -465,7 +472,7 @@ fn draw_input(app: &App) {
         );
     } else {
         draw_line(
-            "Adding new meal".to_string(), BlackBg,
+            format!("Adding new meal on {}", app.entries[app.list.selected_entry_index].date), BlackBg,
             app.width, DRAW_WIDTH, 0
         );
     }
@@ -530,7 +537,7 @@ fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
         let completion = Completion {
             label: "".to_string(),
             filter: format!("{}", item.title),
-            item: item.clone(),
+            item: Some(item.clone()),
         };
 
         if !dict.contains_key(&query) {
@@ -546,23 +553,28 @@ fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
     );
 
     for i in 0..values.len() {
-        let item = &values[i].0.item;
-        values[i].0.label = format!("{} {} {} {} (x{})", item.title, item.quantity, item.measurement, item.calories, values[i].1);
-
-        println!("{}", values[i].1);
+        if let Some(item) = &values[i].0.item {
+            values[i].0.label = format!("{} {} {} {} (x{})", item.title, item.quantity, item.measurement, item.calories, values[i].1);
+        }
     }
 
     return values.into_iter().map(|value| value.0).collect();
 }
 
-fn make_completions_for_section_name() -> Vec<String> {
+fn make_completions_for_section_name() -> Vec<Completion> {
     [ // cleanup: this is dumb how we have to to_string() everything here
-        "Breakfast".to_string(), 
-        "Lunch".to_string(), 
-        "Dinner".to_string(), 
-        "Snack".to_string(), 
-        "Snack 2".to_string()
-    ].to_vec()
+        "Breakfast",
+        "Lunch",
+        "Dinner",
+        "Snack",
+        "Snack 2",
+    ].map(|label| 
+        Completion {
+            filter: label.to_string(),
+            item: None,
+            label: label.to_string()
+        }
+    ).to_vec()
 }
 
 fn make_completions_for_quantity(all_items: &Vec<Item>, item_name: &String) -> Vec<Completion> {
