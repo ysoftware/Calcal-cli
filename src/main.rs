@@ -184,10 +184,21 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
         app.list.item_deletion_index = -1;
-    }
-    else if char_input == 'q' || char_input == 'й' {
+    } else if char_input == 'n' || char_input == 'т' {
+        let today_string = get_today_string();
+        if app.entries.last().unwrap().date != today_string {
+            let entry = parser::EntryEntity {
+                date: today_string,
+                sections: vec![]
+            };
+            app.entries.push(entry);
+            app.list.selected_entry_index = app.entries.len() - 1;
+            upload_data(app);
+        }
+    } else if char_input == 'q' || char_input == 'й' {
         app.should_exit = true;
     }
+
     return did_process_input;
 }
 
@@ -267,10 +278,16 @@ fn draw_list(app: &App) {
     // TODO: introduce vertical scrolling
     let used_lines = std::cmp::min(app.height, drawn_lines + 3); // cleanup: explain this magic number
     for _ in 0..app.height-used_lines { draw_empty(); }
+    
+    let today_string = get_today_string();
+    let should_show_add_day = app.entries.last().unwrap().date != today_string;
+    let status_line_left = if should_show_add_day { 
+        format!("Press n to add {}", today_string)
+    } else { "".to_string() };
 
     draw_empty();
     draw_line_right(
-        "".to_string(), BlackBg, 
+        status_line_left, BlackBg, 
         format!("[{}/{}]", app.list.selected_entry_index + 1, app.entries.len()), BlackBrightBg,
         app.width, DRAW_WIDTH, 0
     );
@@ -818,6 +835,13 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
     }
     
     return months;
+}
+
+fn get_today_string() -> String {
+    use chrono::{DateTime, offset::Utc};
+    let system_time = std::time::SystemTime::now();
+    let datetime: DateTime<Utc> = system_time.into();
+    return datetime.format("%-d %B %Y").to_string();
 }
 
 fn get_month_component(date: &str) -> i32 {
