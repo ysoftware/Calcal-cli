@@ -9,6 +9,7 @@ pub fn test_all() {
     test_first_index();
     test_eat_whitespaces_but_not_newlines();
     test_get_quantity();
+    test_display_float();
 }
 
 pub struct Parser {
@@ -511,7 +512,7 @@ pub fn encode_entries(entities: &Vec<EntryEntity>) -> String {
 }
 
 pub fn formatted_float(value: f32) -> String {
-    format!("{:.0}", value)
+    format!("{value:0.1}").trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
 pub fn measurement_display_value(quantity: &f32, measurement: &QuantityMeasurement) -> String {
@@ -523,25 +524,25 @@ pub fn measurement_display_value(quantity: &f32, measurement: &QuantityMeasureme
             if *quantity == 1.0 {
                 return "1".to_string();
             }
-            return format!("{}", base_quantity);
+            return format!("{base_quantity}");
         },
         QuantityMeasurement::Cup => {
             if *quantity == 1.0 {
                 return "1 cup".to_string();
             }
-            return format!("{} cups", base_quantity);
+            return format!("{base_quantity} cups");
         },
         QuantityMeasurement::Liter => {
             if *quantity > 0.5 {
-                return format!("{} l", base_quantity);
+                return format!("{base_quantity} l");
             }
-            return format!("{} ml", multiplied_quantity);
+            return format!("{multiplied_quantity} ml");
         },
         QuantityMeasurement::Kilogram => {
             if *quantity > 0.5 {
-                return format!("{} kg", base_quantity);
+                return format!("{base_quantity} kg");
             }
-            return format!("{} g", multiplied_quantity);
+            return format!("{multiplied_quantity} g");
         },
     }
 }
@@ -628,9 +629,26 @@ fn test_get_quantity() {
         value.0 == 2.0 && value.1 == Portion
     } else { false };
 
-    if test1 && test2 {
+    let test3 = if let Some(value) = get_quantity("0.5 kg") {
+        value.0 == 0.5 && value.1 == Kilogram
+    } else { false }; 
+
+    if test1 && test2 && test3 {
         // println!("Test 5: OK");
     } else {
-        println!("Test 5: FAIL! 1: {test1}; 2: {test2}");
+        println!("Test 5: FAIL! 1: {test1}; 2: {test2}; 3: {test3}");
+    }
+}
+
+fn test_display_float() {
+    let test1 = formatted_float(0.5) == "0.5";
+    let test2 = formatted_float(1.0) == "1";
+    let test3 = formatted_float(100.1) == "100.1";
+    let test4 = formatted_float(10.0) == "10";
+
+    if test1 && test2 && test3 && test4 {
+        // println!("Test 6: OK");
+    } else {
+        println!("Test 6: FAIL! 1: {test1}; 2: {test2}; 3: {test3}; 4: {test4}");
     }
 }
