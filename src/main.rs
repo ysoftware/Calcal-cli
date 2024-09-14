@@ -350,19 +350,19 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                 refresh_completions(app);
             },
             InputState::Name => {
-                if app.input.completion_index >= 0 {
+                if app.input.query.len() > 2 {
+                    // TODO: trim and capitalise?
+                    app.input.name = app.input.query.clone();
+                } else if app.input.completion_index >= 0 {
                     let section_name = app.input.section_name.clone();
                     append_item(
                         app,
-                        app.list.selected_entry_index, 
+                        app.list.selected_entry_index,
                         &section_name,
                         app.input.filtered_completions[app.input.completion_index as usize].item.as_ref().unwrap().clone()
                     );
                     upload_data(app);
                     return true;
-                } else if app.input.query.len() > 2 {
-                    // TODO: trim and capitalise?
-                    app.input.name = app.input.query.clone();
                 } else {
                     return true; // discard input // TODO: fix not refreshing on irrelevant input
                 }
@@ -373,10 +373,49 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                 refresh_completions(app);
             },
             InputState::Quantity => {
+                if app.input.completion_index >= 0 {
+                    let item = app.input.completions[app.input.completion_index as usize].item.as_ref().unwrap();
+                    app.input.quantity = item.quantity;
+                    app.input.measurement = item.measurement.clone();
+                } else {
+                    if let Some(value) = parser::get_quantity(&app.input.query) {
+                        app.input.quantity = value.0;
+                        app.input.measurement = value.1;
+                    }
+                }
 
+                // TODO: search for entry with this name and measurement to auto-calculate calories
+
+                app.input.state = InputState::Calories;
+                app.input.completion_index = -1;
+                app.input.completions = make_completions_for_quantity(&app.input.all_items, &app.input.name);
+                app.input.query = "".to_string();
+                refresh_completions(app);
             },
             InputState::Calories => {
+                if app.input.completion_index >= 0 {
+                    let item = app.input.completions[app.input.completion_index as usize].item.as_ref().unwrap();
+                    app.input.calories = item.calories;
+                } else if let Ok(calories) = app.input.query.parse::<f32>() {
+                    app.input.calories = calories;
+                } else {
+                    return true;
+                }
 
+                append_item(
+                    app,
+                    app.list.selected_entry_index, 
+                    &app.input.section_name.clone(),
+                    Item {
+                        title: app.input.name.clone(),
+                        calories: app.input.calories.clone(),
+                        measurement: app.input.measurement.clone(),
+                        quantity: app.input.quantity.clone(),
+                    }
+                );
+
+                upload_data(app);
+                return true;
             },
         }
     } else if input[0] == 127 { // DEL // TODO: not del?
@@ -559,7 +598,7 @@ fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
     let mut dict: HashMap<String, (Completion, usize)> = HashMap::new();
 
     for item in all_items {
-        let query = format!("{} {}", item.title, measurement_display_value(&item.quantity, &item.measurement));
+        let query = format!("{}", item.title);
         let completion = Completion {
             label: "".to_string(),
             filter: format!("{}", item.title),

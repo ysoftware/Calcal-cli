@@ -429,7 +429,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-fn get_quantity(text: &str) -> Option<(f32, QuantityMeasurement)> {
+pub fn get_quantity(text: &str) -> Option<(f32, QuantityMeasurement)> {
     assert!(text.is_ascii(), "Quantity text must always be ascii!");
 
     if let Ok(value) = text.parse::<f32>() {
@@ -465,6 +465,85 @@ fn get_quantity(text: &str) -> Option<(f32, QuantityMeasurement)> {
         }
     }
     return None;
+}
+
+pub fn encode_entries(entities: &Vec<EntryEntity>) -> String {
+    let mut result = "".to_string();
+
+    for entity in entities {
+        let mut entry_text = "".to_string();
+        let mut total_calories = 0.0;
+
+        for section in &entity.sections {
+            let mut items_text = "".to_string();
+            let mut section_calories = 0.0;
+
+            for item in &section.items {
+                let quantity_value = measurement_display_value(&item.quantity, &item.measurement);
+                items_text.push_str(
+                    &format!("- {}, {}, {} kcal\n",
+                        item.title,
+                        quantity_value,
+                        formatted_float(item.calories)
+                    ).to_string()
+                );
+                section_calories += item.calories;
+            }
+
+            entry_text.push_str(
+                &format!("{} - {} kcal\n{}\n", 
+                    section.id, 
+                    formatted_float(section_calories),
+                    items_text
+                ).to_string()
+            );
+            total_calories += section_calories;
+        }
+
+        result.push_str(
+            &format!("\nDate: {}\n\n{}\n\nTotal: {} kcal\n", 
+                entity.date, entry_text.trim(), total_calories
+            ).to_string()
+        );
+    }
+
+    return result;
+}
+
+pub fn formatted_float(value: f32) -> String {
+    format!("{:.0}", value)
+}
+
+pub fn measurement_display_value(quantity: &f32, measurement: &QuantityMeasurement) -> String {
+    let base_quantity = formatted_float(*quantity).replace(",", ".");
+    let multiplied_quantity = formatted_float(quantity * 1000.0).replace(",", ".");
+    
+    match measurement {
+        QuantityMeasurement::Portion => {
+            if *quantity == 1.0 {
+                return "1".to_string();
+            }
+            return format!("{}", base_quantity);
+        },
+        QuantityMeasurement::Cup => {
+            if *quantity == 1.0 {
+                return "1 cup".to_string();
+            }
+            return format!("{} cups", base_quantity);
+        },
+        QuantityMeasurement::Liter => {
+            if *quantity > 0.5 {
+                return format!("{} l", base_quantity);
+            }
+            return format!("{} ml", multiplied_quantity);
+        },
+        QuantityMeasurement::Kilogram => {
+            if *quantity > 0.5 {
+                return format!("{} kg", base_quantity);
+            }
+            return format!("{} g", multiplied_quantity);
+        },
+    }
 }
 
 // unit tests
@@ -553,84 +632,5 @@ fn test_get_quantity() {
         // println!("Test 5: OK");
     } else {
         println!("Test 5: FAIL! 1: {test1}; 2: {test2}");
-    }
-}
-
-pub fn encode_entries(entities: &Vec<EntryEntity>) -> String {
-    let mut result = "".to_string();
-
-    for entity in entities {
-        let mut entry_text = "".to_string();
-        let mut total_calories = 0.0;
-
-        for section in &entity.sections {
-            let mut items_text = "".to_string();
-            let mut section_calories = 0.0;
-
-            for item in &section.items {
-                let quantity_value = measurement_display_value(&item.quantity, &item.measurement);
-                items_text.push_str(
-                    &format!("- {}, {}, {} kcal\n",
-                        item.title,
-                        quantity_value,
-                        formatted_float(item.calories)
-                    ).to_string()
-                );
-                section_calories += item.calories;
-            }
-
-            entry_text.push_str(
-                &format!("{} - {} kcal\n{}\n", 
-                    section.id, 
-                    formatted_float(section_calories),
-                    items_text
-                ).to_string()
-            );
-            total_calories += section_calories;
-        }
-
-        result.push_str(
-            &format!("\nDate: {}\n\n{}\n\nTotal: {} kcal\n", 
-                entity.date, entry_text.trim(), total_calories
-            ).to_string()
-        );
-    }
-
-    return result;
-}
-
-pub fn formatted_float(value: f32) -> String {
-    format!("{:.0}", value)
-}
-
-pub fn measurement_display_value(quantity: &f32, measurement: &QuantityMeasurement) -> String {
-    let base_quantity = formatted_float(*quantity).replace(",", ".");
-    let multiplied_quantity = formatted_float(quantity * 1000.0).replace(",", ".");
-    
-    match measurement {
-        QuantityMeasurement::Portion => {
-            if *quantity == 1.0 {
-                return "1".to_string();
-            }
-            return format!("{}", base_quantity);
-        },
-        QuantityMeasurement::Cup => {
-            if *quantity == 1.0 {
-                return "1 cup".to_string();
-            }
-            return format!("{} cups", base_quantity);
-        },
-        QuantityMeasurement::Liter => {
-            if *quantity > 0.5 {
-                return format!("{} l", base_quantity);
-            }
-            return format!("{} ml", multiplied_quantity);
-        },
-        QuantityMeasurement::Kilogram => {
-            if *quantity > 0.5 {
-                return format!("{} kg", base_quantity);
-            }
-            return format!("{} g", multiplied_quantity);
-        },
     }
 }
