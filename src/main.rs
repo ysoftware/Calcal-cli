@@ -392,7 +392,25 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                     }
                 }
 
-                // TODO: search for entry with this name and measurement to auto-calculate calories
+                // TODO: round calories the same way as in Swift
+                // try to calculate calories for the user
+                for item in &app.input.all_items {
+                    if item.title.to_lowercase() == app.input.name.to_lowercase() && item.measurement == app.input.measurement {
+                        append_item(
+                            app,
+                            app.list.selected_entry_index, 
+                            &app.input.section_name.clone(),
+                            Item {
+                                title: app.input.name.clone(),
+                                calories: item.calories / item.quantity * app.input.quantity,
+                                measurement: app.input.measurement.clone(),
+                                quantity: app.input.quantity.clone(),
+                            }
+                        );
+                        upload_data(app);
+                        return true;
+                    }
+                }
 
                 app.input.state = InputState::Calories;
                 app.input.completion_index = -1;
@@ -1017,8 +1035,8 @@ fn truncate(s: String, n: usize) -> String {
 
 // REQUEST
 
-const URL: &str = "http://ysoftware.online/main.php";
-// const URL: &str = "http://localhost:7777/main.php";
+// const URL: &str = "http://ysoftware.online/main.php";
+const URL: &str = "http://localhost:7777/main.php";
 
 fn get_data() -> Result<String, parser::Error> {
     Ok(minreq::get(URL)
