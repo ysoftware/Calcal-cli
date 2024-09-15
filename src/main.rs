@@ -122,7 +122,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         return true;
     }
 
-    if input[0] == 10 { // Enter
+    if char_input == 'd' || input[0] == 10 { // d or Enter
         if app.list.item_deletion_index >= 0 {
             app.list.is_showing_deletion_alert = true;
         }
@@ -130,23 +130,23 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         if app.list.item_deletion_index >= 0 {
             app.list.item_deletion_index = -1;
         }
-    } else if char_input == 'h' || (input[1] == 91 && input[2] == 68) { // arrow left
+    } else if char_input == 'h' || (input[1] == 91 && input[2] == 68) { // h or arrow left
         if app.list.selected_entry_index > 0 {
             app.list.selected_entry_index -= 1;
             app.list.item_deletion_index = -1;
         }
-    } else if char_input == 'l' || (input[1] == 91 && input[2] == 67) { // arrow right
+    } else if char_input == 'l' || (input[1] == 91 && input[2] == 67) { // l or arrow right
         if app.list.selected_entry_index + 1 < app.entries.len() {
             app.list.selected_entry_index += 1;
             app.list.item_deletion_index = -1;
         }
-    } else if char_input == 'j' || (input[1] == 91 && input[2] == 66) { // arrow down
+    } else if char_input == 'j' || (input[1] == 91 && input[2] == 66) { // j or arrow down
         if app.list.item_deletion_index > -1 {
             app.list.item_deletion_index -= 1;
         } else if selected_entry_items_count > 0 {
             app.list.item_deletion_index = (selected_entry_items_count - 1) as i32;
         }
-    } else if char_input == 'k' || (input[1] == 91 && input[2] == 65) { // arrow up
+    } else if char_input == 'k' || (input[1] == 91 && input[2] == 65) { // k or arrow up
         if selected_entry_items_count > 0 {
             if (app.list.item_deletion_index as usize) < selected_entry_items_count - 1 
                 || app.list.item_deletion_index == -1 {
@@ -337,7 +337,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             InputState::SectionName => {
                 if app.input.completion_index >= 0 {
                     app.input.section_name = make_completions_for_section_name()[app.input.completion_index as usize].label.clone();
-                } else if app.input.query.len() > 2 {
+                } else if app.input.query.len() > 0 {
                     // TODO: trim and capitalise?
                     app.input.section_name = app.input.query.clone();
                 } else {
@@ -350,7 +350,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                 refresh_completions(app);
             },
             InputState::Name => {
-                if app.input.query.len() > 2 {
+                if app.input.query.len() > 0 {
                     if app.input.completion_index >= 0 {
                         app.input.name = app.input.filtered_completions[app.input.completion_index as usize].item.as_ref().unwrap().title.clone();
                     } else {
@@ -537,7 +537,7 @@ fn draw_input(app: &App) {
             InputState::Quantity => {
                 let item = completion.item.as_ref().unwrap();
                 draw_line(
-                    format!("{} ({})", item.title, measurement_display_value(&item.quantity, &item.measurement)),
+                    format!("{}, {} -> {} kcal", item.title, measurement_display_value(&item.quantity, &item.measurement), item.calories),
                     color, app.width, DRAW_WIDTH, 0
                 );
             },
@@ -650,41 +650,43 @@ fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
 }
 
 fn make_completions_for_section_name() -> Vec<Completion> {
-    [ // cleanup: this is dumb how we have to to_string() everything here
-        "Breakfast",
-        "Lunch",
-        "Dinner",
-        "Snack",
-        "Snack 2",
-    ].map(|label| 
-        Completion {
-            filter: label.to_string(),
-            item: None,
-            label: label.to_string()
-        }
-    ).to_vec()
+    ["Breakfast", "Lunch", "Dinner", "Snack", "Snack 2"]
+        .map(|label| 
+            Completion {
+                filter: label.to_string(),
+                item: None,
+                label: label.to_string()
+            }
+        ).to_vec()
 }
 
 fn make_completions_for_quantity(all_items: &Vec<Item>, item_name: &String) -> Vec<Completion> {
-    return vec![];
-    // let filtered_items = all_items.into_iter().cloned().filter(|item|
-    //     item.title.to_lowercase() == *item_name.to_lowercase()
-    // ).collect();
+    let mut quantities: Vec<Completion> = vec![];
 
-    // let mut unique_items = remove_duplicates(&filtered_items, |item|
-    //     format!("{} {}", item.quantity, item.measurement)
-    // );
+    'outer: for item in all_items {
+        if item.title.to_lowercase() == item_name.to_lowercase() {
+            let label = format!("{} {} {}", item.title.to_lowercase(), item.quantity, item.measurement);
+            println!("{}", label);
 
-    // unique_items.sort_by(|lhs, rhs| 
-    //     lhs.quantity.partial_cmp(&rhs.quantity).unwrap()
-    // );
-    
-    // let mut result: Vec<Item> = vec![];
-    // for item in &unique_items { 
-    //     result.push(item.clone());
-    // }
+            for quantity in &quantities {
+                if quantity.label == label {
+                    continue 'outer;
+                }
+            }
 
-    // return result;
+            let completion = Completion {
+                label,
+                filter: "".to_string(),
+                item: Some(item.clone())
+            };
+            quantities.push(completion)
+        }
+    }
+
+    quantities.sort_by(|lhs, rhs| 
+        lhs.item.as_ref().unwrap().quantity.partial_cmp(&rhs.item.as_ref().unwrap().quantity).unwrap()
+    );
+    return quantities;
 }
 
 // CALENDAR VIEW
