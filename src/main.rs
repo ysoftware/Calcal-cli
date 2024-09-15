@@ -351,8 +351,12 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             },
             InputState::Name => {
                 if app.input.query.len() > 2 {
-                    // TODO: trim and capitalise?
-                    app.input.name = app.input.query.clone();
+                    if app.input.completion_index >= 0 {
+                        app.input.name = app.input.filtered_completions[app.input.completion_index as usize].item.as_ref().unwrap().title.clone();
+                    } else {
+                        // TODO: trim and capitalise?
+                        app.input.name = app.input.query.clone();
+                    }
                 } else if app.input.completion_index >= 0 {
                     let section_name = app.input.section_name.clone();
                     append_item(
@@ -1009,8 +1013,8 @@ fn truncate(s: String, n: usize) -> String {
 
 // REQUEST
 
-// const URL: &str = "http://185.163.118.53/main.php";
-const URL: &str = "http://localhost:7777/main.php";
+const URL: &str = "http://ysoftware.online/main.php";
+// const URL: &str = "http://localhost:7777/main.php";
 
 fn get_data() -> Result<String, parser::Error> {
     Ok(minreq::get(URL)
