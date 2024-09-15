@@ -126,37 +126,33 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         if app.list.item_deletion_index >= 0 {
             app.list.is_showing_deletion_alert = true;
         }
-    } else if input[0] == 27 {
-        if input[1] == 0 { // Esc
-            if app.list.item_deletion_index >= 0 {
-                app.list.item_deletion_index = -1;
-            }
-        } else if input[1] == 91 {
-            if input[2] == 68 { // arrow left
-                if app.list.selected_entry_index > 0 {
-                    app.list.selected_entry_index -= 1;
+    } else if input[0] == 27 && input[1] == 0 { // Esc
+        if app.list.item_deletion_index >= 0 {
+            app.list.item_deletion_index = -1;
+        }
+    } else if char_input == 'h' || (input[1] == 91 && input[2] == 68) { // arrow left
+        if app.list.selected_entry_index > 0 {
+            app.list.selected_entry_index -= 1;
+            app.list.item_deletion_index = -1;
+        }
+    } else if char_input == 'l' || (input[1] == 91 && input[2] == 67) { // arrow right
+        if app.list.selected_entry_index + 1 < app.entries.len() {
+            app.list.selected_entry_index += 1;
+            app.list.item_deletion_index = -1;
+        }
+    } else if char_input == 'j' || (input[1] == 91 && input[2] == 66) { // arrow down
+        if app.list.item_deletion_index > -1 {
+            app.list.item_deletion_index -= 1;
+        } else if selected_entry_items_count > 0 {
+            app.list.item_deletion_index = (selected_entry_items_count - 1) as i32;
+        }
+    } else if char_input == 'k' || (input[1] == 91 && input[2] == 65) { // arrow up
+        if selected_entry_items_count > 0 {
+            if (app.list.item_deletion_index as usize) < selected_entry_items_count - 1 
+                || app.list.item_deletion_index == -1 {
+                    app.list.item_deletion_index += 1;
+                } else {
                     app.list.item_deletion_index = -1;
-                }
-            } else if input[2] == 67 { // arrow right
-                if app.list.selected_entry_index + 1 < app.entries.len() {
-                    app.list.selected_entry_index += 1;
-                    app.list.item_deletion_index = -1;
-                }
-            } else if input[2] == 66 { // arrow down
-                if app.list.item_deletion_index > -1 {
-                    app.list.item_deletion_index -= 1;
-                } else if selected_entry_items_count > 0 {
-                    app.list.item_deletion_index = (selected_entry_items_count - 1) as i32;
-                }
-            } else if input[2] == 65 { // arrow up
-                if selected_entry_items_count > 0 {
-                    if (app.list.item_deletion_index as usize) < selected_entry_items_count - 1 
-                        || app.list.item_deletion_index == -1 {
-                            app.list.item_deletion_index += 1;
-                        } else {
-                            app.list.item_deletion_index = -1;
-                    }
-                }
             }
         }
     } else if char_input == 'i' || char_input == 'ш' {
