@@ -182,7 +182,6 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.list.item_deletion_index = -1;
     } else if char_input == 'r' {
         download_data(app);
-        return true;
     } else if char_input == 'n' || char_input == 'т' {
         let today_string = get_today_string();
         if app.entries.last().unwrap().date != today_string {
@@ -201,7 +200,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     return did_process_input;
 }
 
-// TODO: round calories
+// TODO: round calories (also in the exported data)
 fn draw_list(app: &App) {
     let mut drawn_lines = 0;
 
@@ -242,6 +241,7 @@ fn draw_list(app: &App) {
         );
         drawn_lines += 2;
 
+        // TODO: draw measurement in its own column
         for i in 0..section.items.len() {
             let item = &section.items[i];
             let left_color = if i % 2 == 1 { White } else { BlackBg };
@@ -257,7 +257,9 @@ fn draw_list(app: &App) {
                 } else {
                     drawn_lines += 1;
                     draw_line_right(
-                        format!("> {}, {}", item.title, measurement_display_value(&item.quantity, &item.measurement)), left_color,
+                        format!("> {}, {}", 
+                            item.title, measurement_display_value(&item.quantity, &item.measurement)
+                        ), left_color,
                         "[delete]".to_string(), RedBrightBg,
                         app.width, DRAW_WIDTH, 0
                     );
@@ -266,7 +268,9 @@ fn draw_list(app: &App) {
                 let right_color = if i % 2 == 1 { White } else { BlackBg };
                 drawn_lines += 1;
                 draw_line_right(
-                    format!("- {}, {}", item.title, measurement_display_value(&item.quantity, &item.measurement)), left_color,
+                    format!("- {}, {}", 
+                        item.title, measurement_display_value(&item.quantity, &item.measurement)
+                    ), left_color,
                     format!("{} kcal", item.calories), right_color,
                     app.width, DRAW_WIDTH, 0
                 );
@@ -505,40 +509,42 @@ fn draw_input(app: &App) {
             InputState::SectionName => {
                 if app.input.query.len() > 0 {
                     draw_line(
-                        format!("{}", completion.label), 
-                        color, app.width, DRAW_WIDTH, 0
+                        format!("{}", completion.label), color, 
+                        app.width, DRAW_WIDTH, 0
                     );
                 } else {
                     draw_line(
-                        completion.label.clone(),
-                        color, app.width, DRAW_WIDTH, 0
+                        completion.label.clone(), color, 
+                        app.width, DRAW_WIDTH, 0
                     );
                 }
             },
             InputState::Name => {
                 if app.input.query.len() > 0 {
                     draw_line(
-                        format!("{}", completion.item.as_ref().unwrap().title), 
-                        color, app.width, DRAW_WIDTH, 0
+                        format!("{}", completion.item.as_ref().unwrap().title), color, 
+                        app.width, DRAW_WIDTH, 0
                     );
                 } else {
                     draw_line(
-                        completion.label.clone(),
-                        color, app.width, DRAW_WIDTH, 0
+                        completion.label.clone(), color, 
+                        app.width, DRAW_WIDTH, 0
                     );
                 }
             },
             InputState::Calories => {
                 draw_line(
-                    format!("{}", completion.item.as_ref().unwrap().title), 
-                    color, app.width, DRAW_WIDTH, 0
+                    format!("{}", completion.item.as_ref().unwrap().title), color, 
+                    app.width, DRAW_WIDTH, 0
                 );
             },
             InputState::Quantity => {
                 let item = completion.item.as_ref().unwrap();
                 draw_line(
-                    format!("{}, {} -> {} kcal", item.title, measurement_display_value(&item.quantity, &item.measurement), item.calories),
-                    color, app.width, DRAW_WIDTH, 0
+                    format!("{}, {} -> {} kcal", 
+                        item.title, measurement_display_value(&item.quantity, &item.measurement), item.calories
+                    ), color, 
+                    app.width, DRAW_WIDTH, 0
                 );
             },
         }
@@ -642,7 +648,8 @@ fn make_completions_for_item_name(all_items: &Vec<Item>) -> Vec<Completion> {
     for i in 0..values.len() {
         if let Some(item) = &values[i].0.item {
             values[i].0.label = format!("{}, {}, {} kcal (x{})", 
-                item.title, measurement_display_value(&item.quantity, &item.measurement), item.calories, values[i].1);
+                item.title, measurement_display_value(&item.quantity, &item.measurement), item.calories, values[i].1
+            );
         }
     }
 
@@ -968,7 +975,6 @@ fn draw_line(
     max_draw_width: usize,
     left_limit: usize
 ) {
-
     draw_line_right(
         string, color, "".to_string(), White,
         window_width, max_draw_width, left_limit
@@ -1033,8 +1039,8 @@ fn truncate(s: String, n: usize) -> String {
 
 // REQUEST
 
-// const URL: &str = "http://ysoftware.online/main.php";
-const URL: &str = "http://localhost:7777/main.php";
+const URL: &str = "http://ysoftware.online/main.php";
+// const URL: &str = "http://localhost:7777/main.php";
 
 fn get_data() -> Result<String, parser::Error> {
     Ok(minreq::get(URL)
