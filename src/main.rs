@@ -184,6 +184,9 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.state = State::Calendar;
         app.calendar = process_calendar_data(&app.entries);
         app.list.item_deletion_index = -1;
+    } else if char_input == 'r' {
+        download_data(app);
+        return true;
     } else if char_input == 'n' || char_input == 'т' {
         let today_string = get_today_string();
         if app.entries.last().unwrap().date != today_string {
@@ -202,6 +205,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     return did_process_input;
 }
 
+// TODO: round calories
 fn draw_list(app: &App) {
     let mut drawn_lines = 0;
 
@@ -341,7 +345,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                     // TODO: trim and capitalise?
                     app.input.section_name = app.input.query.clone();
                 } else {
-                    return true; // discard input // TODO: fix not refreshing on irrelevant input
+                    return true; // discard input
                 }
                 app.input.state = InputState::Name;
                 app.input.completion_index = -1;
@@ -368,7 +372,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                     upload_data(app);
                     return true;
                 } else {
-                    return true; // discard input // TODO: fix not refreshing on irrelevant input
+                    return true; // discard input
                 }
                 app.input.state = InputState::Quantity;
                 app.input.completion_index = -1;
@@ -821,7 +825,7 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
                     months.push(CalendarMonth {
                         title: month_from_number(current_month).to_string(),
                         average: average_calories,
-                        rows: rows
+                        rows
                     });
                     rows = vec![];
                     columns_added = false;
