@@ -122,7 +122,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         return true;
     }
 
-    if char_input == 'd' || input[0] == 10 { // d or Enter
+    if char_input == 'd' {
         if app.list.item_deletion_index >= 0 {
             app.list.is_showing_deletion_alert = true;
         }
@@ -287,9 +287,18 @@ fn draw_list(app: &App) {
     let should_show_add_day = app.entries.last().unwrap().date != today_string;
     let status_line_left = if should_show_add_day { 
         format!("Press n to add {}", today_string)
-    } else { "".to_string() };
+    } else if app.list.item_deletion_index >= 0 {
+        if app.list.is_showing_deletion_alert {
+            "Press y to confirm deletion".to_string()
+        } else {
+            "Press d to delete".to_string()
+        }
+    } else { 
+        "".to_string() 
+    };
 
     draw_empty();
+
     draw_line_right(
         status_line_left, BlackBg, 
         format!("[{}/{}]", app.list.selected_entry_index + 1, app.entries.len()), BlackBrightBg,
@@ -402,7 +411,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                             &app.input.section_name.clone(),
                             Item {
                                 title: app.input.name.clone(),
-                                calories: item.calories / item.quantity * app.input.quantity,
+                                calories: (item.calories / item.quantity * app.input.quantity).ceil(),
                                 measurement: app.input.measurement.clone(),
                                 quantity: app.input.quantity.clone(),
                             }
@@ -414,7 +423,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
 
                 app.input.state = InputState::Calories;
                 app.input.completion_index = -1;
-                app.input.completions = make_completions_for_quantity(&app.input.all_items, &app.input.name);
+                app.input.completions = vec![];
                 app.input.query = "".to_string();
                 refresh_completions(app);
             },
