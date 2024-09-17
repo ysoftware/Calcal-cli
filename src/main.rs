@@ -19,7 +19,7 @@ struct App {
     height: usize,
     list: List,
     input: Input,
-    calendar: Vec<CalendarMonth>,
+    calendar: Calendar,
 }
 
 fn main() {
@@ -178,7 +178,8 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
         app.input.section_name = "".to_string();
     } else if char_input == 'c' || char_input == 'с' { // latin and cyrillic c are different
         app.state = State::Calendar;
-        app.calendar = process_calendar_data(&app.entries);
+        app.calendar.scroll_offset = 0;
+        app.calendar.months = process_calendar_data(&app.entries);
         app.list.item_deletion_index = -1;
     } else if char_input == 'r' {
         download_data(app);
@@ -707,6 +708,11 @@ fn make_completions_for_quantity(all_items: &Vec<Item>, item_name: &String) -> V
 
 // CALENDAR VIEW
 
+struct Calendar {
+    scroll_offset: usize,
+    months: Vec<CalendarMonth>,
+}
+
 struct CalendarMonth {
     title: String,
     average: f32,
@@ -720,14 +726,24 @@ struct CalendarCell {
 }
 
 fn process_input_calendar(app: &mut App, input: [u8; 4]) -> bool {
+    let char_input = as_char(input);
+
     if input[0] == 27 && input[1] == 0 { // ESC
         app.state = State::List;
+    } else if char_input == 'j' || (input[1] == 91 && input[2] == 66) { // j or arrow down
+        if app.calendar.scroll_offset > 0 {
+            app.calendar.scroll_offset -= 1
+        }
+    } else if char_input == 'k' || (input[1] == 91 && input[2] == 65) { // k or arrow up
+        if app.calendar.months.len() > app.calendar.scroll_offset + 1 {
+            app.calendar.scroll_offset += 1
+        }
     }
     return true;
 }
 
 fn draw_calendar(app: &App) {
-    if app.calendar.len() == 0 {
+    if app.calendar.months.len() == 0 {
         println!("Calendar is empty");
         return;
     }
@@ -747,7 +763,15 @@ fn draw_calendar(app: &App) {
 
     draw_empty();
 
-    for month in &app.calendar {
+    let last_month = if app.calendar.months.len() > app.calendar.scroll_offset {
+        app.calendar.months.len() - app.calendar.scroll_offset
+    } else { 
+        1
+    };
+
+    for i in 0..last_month {
+        let month = &app.calendar.months[i];
+
         let subtitle: String = if app.width > 33 {
             format!("∅ {:.0}", month.average)
         } else {
