@@ -350,7 +350,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
         match app.input.state {
             InputState::SectionName => {
                 if app.input.completion_index >= 0 {
-                    app.input.section_name = make_completions_for_section_name()[app.input.completion_index as usize].label.clone();
+                        app.input.section_name = app.input.filtered_completions[app.input.completion_index as usize].label.clone();
                 } else if app.input.query.len() > 0 {
                     // TODO: trim and capitalise?
                     app.input.section_name = app.input.query.clone();
@@ -1166,3 +1166,5 @@ fn upload_data(app: &mut App) {
 
     download_data(app);
 }
+
+// TODO: s -> type "lunch" -> select first element -> cappuccino - it gets added to breakfast: selection is with non-empty query is incorrect
