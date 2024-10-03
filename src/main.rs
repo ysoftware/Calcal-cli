@@ -454,13 +454,20 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                 return true;
             },
         }
-    } else if input[0] == 127 { // DEL // TODO: not del?
+    } else if input[0] == 127 && (input[1] == 0 || input[1] == 127) && input[2] == 0 && input[3] == 0 { // backspace
         if app.input.query.len() > 0 {
             app.input.query.pop();
             app.input.completion_index = -1;
         }
-    } else if !(input[0] > 0 && input[0] < 32) { // typing text
+    } else if (input[0] >= 208 && input[0] <= 209 && input[1] >= 128 && input[1] <= 200) // cyrillic alphabet
+                || (input[0] >= 32 && input[0] < 127) { // latin alphabet
         app.input.query.push(as_char(input));
+        app.input.completion_index = -1;
+    } else if input[0] == 15 && input[1] == 0 && input[2] == 0 && input[3] == 0 {
+        app.input.query.push('ó'); // ctrl+o
+        app.input.completion_index = -1;
+    } else if input[0] == 5 && input[1] == 0 && input[2] == 0 && input[3] == 0 {
+        app.input.query.push('é'); // ctrl+e
         app.input.completion_index = -1;
     } else if input[0] == 27 { // special characters
         if input[1] == 0 { // Esc
@@ -468,19 +475,16 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
             app.input.query = "".to_string();
             app.input.completion_index = -1;
         } else if input[1] == 115 {
-            app.input.query.push('ß');
-            app.input.completion_index = -1;
-        } else if input[1] == 101 {
-            app.input.query.push('é');
+            app.input.query.push('ß'); // alt+s
             app.input.completion_index = -1;
         } else if input[1] == 117 {
-            app.input.query.push('ü');
+            app.input.query.push('ü'); // alt+u
             app.input.completion_index = -1;
         } else if input[1] == 111 {
-            app.input.query.push('ö'); // TODO: type ó for Jamón
+            app.input.query.push('ö'); // alt+o
             app.input.completion_index = -1;
         } else if input[1] == 97 {
-            app.input.query.push('ä');
+            app.input.query.push('ä'); // alt+a
             app.input.completion_index = -1;
         } else if input[1] == 91 && input[2] == 66 { // arrow down
             if app.input.completion_index > -1 {
