@@ -4,6 +4,8 @@ use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
 use parser::{QuantityMeasurement, Item, measurement_display_value};
 use std::collections::HashMap;
 
+// TODO: input calories with / to recalculate per weight
+
 #[allow(unused_imports)]
 use std::process::exit;
 
@@ -1170,5 +1172,3 @@ fn upload_data(app: &mut App) {
 
     download_data(app);
 }
-
-// TODO: s -> type "lunch" -> select first element -> cappuccino - it gets added to breakfast: selection is with non-empty query is incorrect
