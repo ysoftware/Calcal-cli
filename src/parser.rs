@@ -307,7 +307,10 @@ fn next_matches_ascii_s(bytes: &[u8], i: usize, end_index: usize, search: &str) 
 }
 
 fn print_error_position(parser: &Parser) {
-    let trail_start = max(parser.i-10, 0);
+    let mut trail_start = 0; 
+    if parser.i >= 10 {
+        trail_start = max(parser.i-10, 0);
+    }
     let previous_symbols = &parser.text[trail_start..parser.i];
     let count_of_newlines = count_characters_in_string(previous_symbols, '\n');
 
