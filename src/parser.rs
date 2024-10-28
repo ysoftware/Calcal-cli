@@ -512,7 +512,7 @@ pub fn encode_entries(entities: &Vec<EntryEntity>) -> String {
 }
 
 pub fn formatted_float(value: f32) -> String {
-    format!("{value:0.1}").trim_end_matches('0').trim_end_matches('.').to_string()
+    format!("{value:0.3}").trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
 pub fn measurement_display_value(quantity: &f32, measurement: &QuantityMeasurement) -> String {
