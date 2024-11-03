@@ -117,7 +117,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
             } else {
                 app.entries[app.list.selected_entry_index].sections[section_index].items.remove(item_index as usize);
             }
-            upload_data(app);
+            upload_data(app.entries[app.list.selected_entry_index].clone());
         }
         app.list.is_showing_deletion_alert = false;
         app.list.item_deletion_index = -1;
@@ -192,9 +192,9 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
                 date: today_string,
                 sections: vec![]
             };
-            app.entries.push(entry);
+            app.entries.push(entry.clone());
             app.list.selected_entry_index = app.entries.len() - 1;
-            upload_data(app);
+            upload_data(entry);
         }
     } else if char_input == 'q' || char_input == 'й' {
         app.should_exit = true;
@@ -381,7 +381,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                         &section_name,
                         app.input.filtered_completions[app.input.completion_index as usize].item.as_ref().unwrap().clone()
                     );
-                    upload_data(app);
+                    upload_data(app.entries.last().unwrap().clone());
                     return true;
                 } else {
                     return true; // discard input
@@ -419,7 +419,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                                 quantity: app.input.quantity.clone(),
                             }
                         );
-                        upload_data(app);
+                        upload_data(app.entries.last().unwrap().clone());
                         return true;
                     }
                 }
@@ -452,7 +452,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                     }
                 );
 
-                upload_data(app);
+                upload_data(app.entries.last().unwrap().clone());
                 return true;
             },
         }
@@ -938,7 +938,7 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
             CalendarMonth {
                 title: month_from_number(current_month).to_string(),
                 average: average_calories,
-                rows: rows
+                rows
             }
         );
     }
@@ -1078,8 +1078,8 @@ fn truncate(s: String, n: usize) -> String {
 
 // REQUEST
 
-const URL: &str = "http://ysoftware.online/main.php";
-// const URL: &str = "http://localhost:7777/main.php";
+// const URL: &str = "http://ysoftware.online/main.php";
+const URL: &str = "http://localhost:7777/main.php";
 
 fn get_data() -> Result<String, parser::Error> {
     Ok(minreq::get(URL)
@@ -1149,11 +1149,12 @@ fn download_data(app: &mut App) {
     app.state = State::List;
 }
 
-fn upload_data(app: &mut App) {
+fn upload_data(entry: parser::EntryEntity) {
     terminal::clear_window();
     println!("Uploading data...");
 
-    let data = parser::encode_entries(&app.entries);
+    let entries = vec![entry];
+    let data = parser::encode_entries(&entries);
     let response = post_data(data).unwrap_or_else(|error| {
         eprintln!("An error occured while making http request: {error}");
         terminal::restore_terminal();
@@ -1169,6 +1170,4 @@ fn upload_data(app: &mut App) {
         terminal::restore_terminal();
         exit(1);
     }
-
-    download_data(app);
 }

@@ -19,11 +19,13 @@ pub struct Parser {
     pub entries: Vec<EntryEntity>,
 }
 
+#[derive(Clone)]
 pub struct EntryEntity {
     pub date: String,
     pub sections: Vec<EntrySectionEntity>,
 }
 
+#[derive(Clone)]
 pub struct EntrySectionEntity {
     pub id: String,
     pub items: Vec<Item>,
