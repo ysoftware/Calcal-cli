@@ -1078,8 +1078,8 @@ fn truncate(s: String, n: usize) -> String {
 
 // REQUEST
 
-// const URL: &str = "http://ysoftware.online/main.php";
-const URL: &str = "http://localhost:7777/main.php";
+const URL: &str = "http://ysoftware.online/main.php";
+// const URL: &str = "http://localhost:7777/main.php";
 
 fn get_data() -> Result<String, parser::Error> {
     Ok(minreq::get(URL)
