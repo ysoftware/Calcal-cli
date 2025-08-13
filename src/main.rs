@@ -4,8 +4,6 @@ use terminal::{ Color, Color::*, color_start, COLOR_END, as_char };
 use parser::{QuantityMeasurement, Item, measurement_display_value};
 use std::collections::HashMap;
 
-// TODO: input calories with / to recalculate per weight
-
 #[allow(unused_imports)]
 use std::process::exit;
 
@@ -86,7 +84,7 @@ fn process_input_list(app: &mut App, input: [u8; 4]) -> bool {
     let did_process_input: bool;
     did_process_input = true; // this should be inside of blocks to redraw only when needed
                               // but it is leading to slow scrolling through pages
-    
+
     let char_input = as_char(input);
     let selected_entry_items_count = count_entry_items(&app.entries[app.list.selected_entry_index]);
 
@@ -285,7 +283,7 @@ fn draw_list(app: &App) {
     // TODO: introduce vertical scrolling
     let used_lines = std::cmp::min(app.height, drawn_lines + 3); // cleanup: explain this magic number
     for _ in 0..app.height-used_lines { draw_empty(); }
-    
+
     let today_string = get_today_string();
     let should_show_add_day = app.entries.last().unwrap().date != today_string;
     let status_line_left = if should_show_add_day { 
@@ -434,6 +432,23 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
                 if app.input.completion_index >= 0 {
                     let item = app.input.completions[app.input.completion_index as usize].item.as_ref().unwrap();
                     app.input.calories = item.calories;
+                } else if app.input.query.ends_with("/") {
+                    let mut calorie_value_input = app.input.query.chars();
+                    calorie_value_input.next_back();
+                    if let Ok(calories_value) = calorie_value_input.as_str().parse::<f32>() {
+                        let quantity = app.input.quantity;
+                        match app.input.measurement {
+                            QuantityMeasurement::Portion | QuantityMeasurement::Cup => {
+                                app.input.calories = calories_value * quantity;
+                            },
+                            QuantityMeasurement::Liter | QuantityMeasurement::Kilogram => {
+                                app.input.calories = calories_value * quantity * 10.0;
+                            },
+                        }
+                    } else {
+                        app.input.query = "".to_string();
+                        return true;
+                    }
                 } else if let Ok(calories) = app.input.query.parse::<f32>() {
                     app.input.calories = calories;
                 } else {
@@ -442,7 +457,7 @@ fn process_input_input(app: &mut App, input: [u8; 4]) -> bool {
 
                 append_item(
                     app,
-                    app.list.selected_entry_index, 
+                    app.list.selected_entry_index,
                     &app.input.section_name.clone(),
                     Item {
                         title: app.input.name.clone(),
@@ -942,7 +957,7 @@ fn process_calendar_data(entries: &Vec<parser::EntryEntity>) -> Vec<CalendarMont
             }
         );
     }
-    
+
     return months;
 }
 
@@ -1111,7 +1126,7 @@ fn post_data(content: String) -> Result<minreq::Response, minreq::Error> {
     body += "\r\n";
 
     body += &format!("--{}--\r\n", boundary);
-    
+
     return minreq::post(URL)
         .with_header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
         .with_body(body)
