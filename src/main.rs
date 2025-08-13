@@ -1106,7 +1106,7 @@ fn get_data() -> Result<String, parser::Error> {
 }
 
 fn post_data(content: String) -> Result<minreq::Response, minreq::Error> {
-    let password = std::fs::read_to_string("password.txt").expect("Missing password.txt file.");
+    let password = std::fs::read_to_string("password.txt").expect("Missing password.txt file in the working dir.");
     let boundary = "REQUEST_BOUNDARY";
 
     let mut body = "".to_string();
